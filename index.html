@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cluster Data Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f6f3ec;
+      --surface: #fffcf7;
+      --wash: #efeae0;
+      --ink: #1f1c18;
+      --muted: #6f6a62;
+      --subtle: #9a948a;
+      --line: color-mix(in oklab, var(--ink) 12%, transparent);
+      --line-strong: color-mix(in oklab, var(--ink) 22%, transparent);
+      --accent: #243833;
+      --accent-fg: #fffcf7;
+      --hover: #ece7d8;
+      --dup: #efe6c8;
+      --warn-bg: #f3e6e2;
+      --warn-fg: #5c2e24;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --ease: cubic-bezier(0.23, 1, 0.32, 1);
+    }
+
+    * { box-sizing: border-box; }
+    html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    h1, h2 { font-family: "Newsreader", Georgia, serif; font-weight: 500; letter-spacing: -0.03em; text-wrap: balance; margin: 0; }
+    p { text-wrap: pretty; }
+    button, [role="button"] { cursor: pointer; }
+    button:disabled { cursor: default; opacity: 0.45; }
+
+    .page { max-width: 1120px; margin: 0 auto; padding: 32px 20px 64px; }
+    header.hero { margin-bottom: 28px; }
+    .kicker {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 8px;
+    }
+    h1 { font-size: clamp(1.9rem, 3vw, 2.6rem); line-height: 1.15; }
+    .lede { margin: 8px 0 0; color: var(--muted); max-width: 36rem; }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) + 8px);
+      padding: 20px;
+    }
+    .panel-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 160px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      color: var(--ink);
+      padding: 12px 14px;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      resize: vertical;
+    }
+    textarea:focus, select:focus, input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent);
+    }
+
+    .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 0 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      background: transparent;
+      color: var(--ink);
+      transition: background 160ms var(--ease), border-color 160ms var(--ease), opacity 160ms var(--ease);
+    }
+    .btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+    .btn-primary { background: var(--accent); color: var(--accent-fg); }
+    .btn-primary:hover { opacity: 0.92; }
+    .btn-ghost { border-color: var(--line); background: var(--surface); }
+    .btn-ghost:hover { background: var(--hover); }
+    .btn-text { color: var(--muted); min-height: 36px; padding: 0 10px; }
+    .btn-text:hover { color: var(--ink); background: var(--hover); }
+
+    .note {
+      display: none;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      background: var(--warn-bg);
+      color: var(--warn-fg);
+      font-size: 13px;
+    }
+    .note.show { display: block; }
+
+    .workspace { display: none; margin-top: 22px; }
+    .workspace.open { display: grid; gap: 18px; }
+    @media (min-width: 900px) {
+      .workspace.open { grid-template-columns: 260px 1fr; align-items: start; }
+    }
+
+    .options { background: var(--surface); border: 1px solid var(--line); border-radius: calc(var(--radius) + 8px); padding: 18px; }
+    .opt-group { display: flex; flex-direction: column; gap: 2px; margin-bottom: 14px; }
+    .opt-group legend {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+      padding: 0;
+    }
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 40px;
+      font-size: 14px;
+    }
+    .check input { width: 16px; height: 16px; accent-color: var(--accent); flex-shrink: 0; }
+    .filter-row { display: grid; grid-template-columns: 1fr 72px; gap: 8px; }
+    select, input[type="number"] {
+      width: 100%;
+      height: 40px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 14px;
+      padding: 0 10px;
+    }
+
+    .stage { min-width: 0; }
+    .tabs {
+      display: inline-flex;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface);
+      margin-bottom: 12px;
+    }
+    .tab {
+      border: 0;
+      background: transparent;
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+    .tab[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); }
+    .meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+    .chip {
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--wash);
+      border-radius: 999px;
+      padding: 4px 10px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 26rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 640px; }
+    th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--wash);
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      position: sticky; top: 0;
+    }
+    td { padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr { cursor: pointer; }
+    tbody tr:hover td { background: var(--hover); }
+    .num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .group td {
+      text-align: center;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: var(--wash);
+      cursor: default;
+    }
+    tr.dup td { background: var(--dup); }
+    .empty { padding: 40px 16px; text-align: center; color: var(--muted); font-size: 14px; }
+
+    .detail-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .detail-bar select { width: auto; min-width: 160px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <p class="kicker">xjView / CAT12</p>
+      <h1>Cluster Data Visualizer</h1>
+      <p class="lede">Paste a cluster report, shape the table, and export. Nothing leaves the browser.</p>
+    </header>
+
+    <section class="panel">
+      <label class="panel-label" for="dataInput">Report</label>
+      <textarea id="dataInput" placeholder="Cluster 1&#10;Number of voxels: 1842&#10;Peak MNI coordinate: -22 -4 10&#10;…"></textarea>
+      <div class="row">
+        <button class="btn btn-primary" type="button" onclick="loadData()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          Load data
+        </button>
+        <button class="btn btn-ghost" type="button" onclick="clearAndPaste()">Clear & paste</button>
+        <button class="btn btn-text" type="button" onclick="loadSample()">Sample</button>
+        <button class="btn btn-text" type="button" onclick="clearAll()">Clear</button>
+      </div>
+      <div id="warningMessage" class="note"></div>
+    </section>
+
+    <div id="workspace" class="workspace">
+      <aside class="options">
+        <fieldset class="opt-group">
+          <legend>Columns</legend>
+          <label class="check"><input type="checkbox" id="firstRegion" onchange="refresh()"> First region</label>
+          <label class="check"><input type="checkbox" id="lastRegion" onchange="refresh()"> Last region</label>
+          <label class="check"><input type="checkbox" id="sortByFirstRegion" onchange="refresh()"> Sort by first region</label>
+          <label class="check"><input type="checkbox" id="highlightDuplicates" onchange="refresh()"> Highlight duplicates</label>
+        </fieldset>
+        <fieldset class="opt-group">
+          <legend>Ignore</legend>
+          <label class="check"><input type="checkbox" id="ignoreUndefined" onchange="refresh()"> Undefined</label>
+          <label class="check"><input type="checkbox" id="ignoreWhiteMatter" onchange="refresh()"> White matter</label>
+          <label class="check"><input type="checkbox" id="ignoreGrayMatter" onchange="refresh()"> Gray matter</label>
+          <label class="check"><input type="checkbox" id="removeAALSuffix" onchange="refresh()"> (aal3v1) suffix</label>
+        </fieldset>
+        <fieldset class="opt-group">
+          <legend>Voxels</legend>
+          <div class="filter-row">
+            <select id="voxelFilterType" onchange="refresh()">
+              <option value="greater">Greater than</option>
+              <option value="less">Less than</option>
+            </select>
+            <input type="number" id="voxelFilterValue" placeholder="n" oninput="refresh()">
+          </div>
+        </fieldset>
+        <button class="btn btn-ghost" type="button" onclick="selectAllCheckboxes()">Select all</button>
+      </aside>
+
+      <div class="stage">
+        <div class="tabs" role="tablist">
+          <button class="tab" id="tab-general" type="button" role="tab" aria-selected="true" onclick="showSection('general')">General</button>
+          <button class="tab" id="tab-detail" type="button" role="tab" aria-selected="false" onclick="showSection('detail')">Detail</button>
+        </div>
+        <div class="meta" id="meta"></div>
+
+        <div id="generalSection">
+          <div class="row" style="margin:0 0 10px">
+            <button class="btn btn-ghost" type="button" id="exportGeneralCSV" style="display:none" onclick="exportToCSV('general')">Export CSV</button>
+          </div>
+          <div id="generalOutput"></div>
+        </div>
+
+        <div id="detailSection" style="display:none">
+          <div class="detail-bar">
+            <select id="clusterSelect" onchange="showDetail()" aria-label="Cluster"></select>
+            <button class="btn btn-ghost" type="button" id="exportDetailCSV" style="display:none" onclick="exportToCSV('detail')">Export CSV</button>
+          </div>
+          <div id="detailOutput"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SAMPLE = `Cluster 1
+Number of voxels: 1842
+Peak MNI coordinate: -22 -4 10
+Peak MNI coordinate region: Left Putamen // Putamen_L (aal3v1) // undefined
+Peak intensity: 5.21
+# voxels	structure
+1240	Putamen_L (aal3v1)
+380	Pallidum_L (aal3v1)
+142	Caudate_L (aal3v1)
+80	white matter
+----------------------
+Cluster 2
+Number of voxels: 967
+Peak MNI coordinate: 38 -62 -28
+Peak MNI coordinate region: Right Cerebellum // Cerebellum_Crus1_R (aal3v1)
+Peak intensity: 4.63
+# voxels	structure
+610	Cerebellum_Crus1_R (aal3v1)
+210	Cerebellum_Crus2_R (aal3v1)
+90	gray matter
+----------------------
+Cluster 3
+Number of voxels: 156
+Peak MNI coordinate: 12 -78 12
+Peak MNI coordinate region: Right Calcarine // Calcarine_R (aal3v1)
+Peak intensity: 3.41
+# voxels	structure
+110	Calcarine_R (aal3v1)
+46	Cuneus_R (aal3v1)
+`;
+
+    function parseClusterData(text) {
+      const clusters = [];
+      const clusterBlocks = text.replace(/\r\n/g, '\n').split('----------------------').filter(block => block.trim().length > 0);
+      clusterBlocks.forEach(block => {
+        const lines = block.trim().split('\n').map(line => line.trim());
+        const cluster = {};
+        let currentClusterNum = null;
+        let inVoxelTable = false;
+        const voxels = [];
+        lines.forEach(line => {
+          if (line.startsWith('Cluster ')) {
+            const match = line.match(/Cluster (\d+)/);
+            if (!match) return;
+            currentClusterNum = match[1];
+            cluster.cluster = currentClusterNum;
+          } else if (line.startsWith('Number of voxels:')) {
+            cluster.numberOfVoxels = parseInt(line.split(':')[1].trim(), 10);
+          } else if (line.startsWith('Peak MNI coordinate:')) {
+            cluster.peakMNI = line.split(':').slice(1).join(':').trim();
+          } else if (line.startsWith('Peak MNI coordinate region:')) {
+            cluster.peakRegion = line.split(':').slice(1).join(':').trim();
+          } else if (line.startsWith('Peak intensity:')) {
+            cluster.peakIntensity = parseFloat(line.split(':')[1].trim());
+          } else if (line.startsWith('# voxels') && line.toLowerCase().includes('structure')) {
+            inVoxelTable = true;
+          } else if (inVoxelTable && line.length > 0 && !line.startsWith('--TOTAL # VOXELS--')) {
+            const parts = line.split(/\s+/);
+            if (parts.length >= 2) {
+              voxels.push({ voxelCount: parseInt(parts[0], 10), structure: parts.slice(1).join(' ') });
+            }
+          }
+        });
+        if (currentClusterNum) {
+          cluster.voxels = voxels;
+          clusters.push(cluster);
+        }
+      });
+      return clusters;
+    }
+
+    function getGeneralData(clusters, options) {
+      const {
+        filterFirstRegion, filterLastRegion, ignoreUndefined, ignoreWhiteMatter,
+        ignoreGrayMatter, sortByFirstRegion, voxelFilterType, voxelFilterValue, removeAALSuffix
+      } = options;
+      let data = clusters.map(cluster => {
+        let regionParts = (cluster.peakRegion || '').split('//').map(p => p.trim()).filter(Boolean);
+        if (ignoreUndefined) regionParts = regionParts.filter(p => p.toLowerCase() !== 'undefined');
+        if (ignoreWhiteMatter) regionParts = regionParts.filter(p => p.toLowerCase() !== 'white matter');
+        if (ignoreGrayMatter) regionParts = regionParts.filter(p => p.toLowerCase() !== 'gray matter');
+        let first = regionParts[0] || '';
+        let last = regionParts.length ? regionParts[regionParts.length - 1] : '';
+        let full = regionParts.join(' // ');
+        if (removeAALSuffix) {
+          first = first.replace(/\s*\(aal3v1\)$/i, '');
+          last = last.replace(/\s*\(aal3v1\)$/i, '');
+          full = full.replace(/\s*\(aal3v1\)$/ig, '');
+        }
+        const result = {
+          cluster: cluster.cluster,
+          numberOfVoxels: cluster.numberOfVoxels,
+          peakMNI: cluster.peakMNI,
+          peakIntensity: cluster.peakIntensity
+        };
+        if (!filterFirstRegion && !filterLastRegion) result.peakRegion = full;
+        else {
+          if (filterFirstRegion) result.firstRegion = first;
+          if (filterLastRegion) result.lastRegion = last;
+        }
+        return result;
+      });
+      if (voxelFilterValue !== null && voxelFilterValue !== '') {
+        const value = parseInt(voxelFilterValue, 10);
+        if (!isNaN(value)) {
+          data = data.filter(item => voxelFilterType === 'greater' ? item.numberOfVoxels > value : item.numberOfVoxels < value);
+        }
+      }
+      if (sortByFirstRegion && filterFirstRegion) {
+        data.sort((a, b) => {
+          const fa = a.firstRegion || '', fb = b.firstRegion || '';
+          if (fa < fb) return -1;
+          if (fa > fb) return 1;
+          return b.numberOfVoxels - a.numberOfVoxels;
+        });
+      }
+      return data;
+    }
+
+    function getDetailData(clusters, clusterNum) {
+      const cluster = clusters.find(c => c.cluster === clusterNum);
+      return cluster ? cluster.voxels : [];
+    }
+
+    let parsedClusters = [];
+    let currentGeneralData = [];
+    let currentDetailData = [];
+
+    function optionsFromUI() {
+      const sort = document.getElementById('sortByFirstRegion').checked;
+      const highlight = document.getElementById('highlightDuplicates').checked;
+      if (sort) document.getElementById('firstRegion').checked = true;
+      if (highlight) {
+        document.getElementById('firstRegion').checked = true;
+        document.getElementById('lastRegion').checked = true;
+      }
+      return {
+        filterFirstRegion: document.getElementById('firstRegion').checked,
+        filterLastRegion: document.getElementById('lastRegion').checked,
+        ignoreUndefined: document.getElementById('ignoreUndefined').checked,
+        ignoreWhiteMatter: document.getElementById('ignoreWhiteMatter').checked,
+        ignoreGrayMatter: document.getElementById('ignoreGrayMatter').checked,
+        sortByFirstRegion: sort,
+        voxelFilterType: document.getElementById('voxelFilterType').value,
+        voxelFilterValue: document.getElementById('voxelFilterValue').value,
+        removeAALSuffix: document.getElementById('removeAALSuffix').checked
+      };
+    }
+
+    function loadData() {
+      const text = document.getElementById('dataInput').value.trim();
+      if (!text) { showWarning('Paste a cluster report first.'); return; }
+      try {
+        const clusters = parseClusterData(text);
+        onDataLoaded(clusters);
+      } catch {
+        showWarning('Invalid data format. Please check the input.');
+      }
+    }
+
+    function loadSample() {
+      document.getElementById('dataInput').value = SAMPLE;
+      document.getElementById('ignoreUndefined').checked = true;
+      document.getElementById('ignoreWhiteMatter').checked = true;
+      document.getElementById('removeAALSuffix').checked = true;
+      document.getElementById('firstRegion').checked = true;
+      loadData();
+    }
+
+    function clearAll() {
+      document.getElementById('dataInput').value = '';
+      parsedClusters = [];
+      currentGeneralData = [];
+      currentDetailData = [];
+      document.getElementById('workspace').classList.remove('open');
+      document.getElementById('generalOutput').innerHTML = '';
+      document.getElementById('detailOutput').innerHTML = '';
+    }
+
+    function clearAndPaste() {
+      document.getElementById('dataInput').value = '';
+      navigator.clipboard.readText().then(text => {
+        document.getElementById('dataInput').value = text;
+      }).catch(() => showWarning('Could not read the clipboard. Paste the report manually.'));
+    }
+
+    function showWarning(message) {
+      const el = document.getElementById('warningMessage');
+      el.textContent = message;
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 3200);
+    }
+
+    function onDataLoaded(clusters) {
+      if (!clusters.length) { showWarning('No clusters found.'); return; }
+      parsedClusters = clusters;
+      const select = document.getElementById('clusterSelect');
+      select.innerHTML = clusters.map(c => `<option value="${c.cluster}">Cluster ${c.cluster}</option>`).join('');
+      document.getElementById('workspace').classList.add('open');
+      showSection('general');
+      refresh();
+      showDetail();
+    }
+
+    function showSection(section) {
+      document.getElementById('generalSection').style.display = section === 'general' ? 'block' : 'none';
+      document.getElementById('detailSection').style.display = section === 'detail' ? 'block' : 'none';
+      document.getElementById('tab-general').setAttribute('aria-selected', section === 'general' ? 'true' : 'false');
+      document.getElementById('tab-detail').setAttribute('aria-selected', section === 'detail' ? 'true' : 'false');
+    }
+
+    function refresh() {
+      if (!parsedClusters.length) return;
+      renderGeneral(getGeneralData(parsedClusters, optionsFromUI()));
+    }
+
+    function renderGeneral(data) {
+      currentGeneralData = data;
+      const highlightDuplicates = document.getElementById('highlightDuplicates').checked;
+      const sortByFirstRegion = document.getElementById('sortByFirstRegion').checked;
+      const hasFirstAndLast = data[0] && data[0].hasOwnProperty('firstRegion') && data[0].hasOwnProperty('lastRegion');
+      const addDuplicateColumn = highlightDuplicates && hasFirstAndLast;
+      const voxels = data.reduce((s, r) => s + (r.numberOfVoxels || 0), 0);
+      document.getElementById('meta').innerHTML =
+        `<span class="chip">${data.length} cluster${data.length === 1 ? '' : 's'}</span>` +
+        `<span class="chip">${voxels.toLocaleString()} voxels</span>` +
+        (parsedClusters.length > data.length ? `<span class="chip">${parsedClusters.length - data.length} hidden</span>` : '');
+
+      if (!data.length) {
+        document.getElementById('generalOutput').innerHTML = '<div class="table-wrap"><div class="empty">No clusters match these filters.</div></div>';
+        document.getElementById('exportGeneralCSV').style.display = 'none';
+        return;
+      }
+
+      let headers = ['Cluster', 'Number of Voxels', 'Peak MNI Coordinate'];
+      const regionColumns = [];
+      if (data[0].hasOwnProperty('peakRegion')) {
+        headers.push('Peak MNI Coordinate Region');
+        regionColumns.push('peakRegion');
+      } else {
+        if (data[0].hasOwnProperty('firstRegion')) { headers.push('First Region'); regionColumns.push('firstRegion'); }
+        if (data[0].hasOwnProperty('lastRegion')) { headers.push('Last Region'); regionColumns.push('lastRegion'); }
+      }
+      headers.push('Peak Intensity');
+      if (addDuplicateColumn) headers.push('Is Duplicate');
+
+      let html = `<div class="table-wrap"><table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>`;
+      let currentFirst = '';
+      const seenLast = new Set();
+      data.forEach(item => {
+        let isDuplicate = false;
+        if (addDuplicateColumn) {
+          const first = item.firstRegion || '';
+          const last = item.lastRegion || '';
+          if (first !== currentFirst) { currentFirst = first; seenLast.clear(); }
+          if (seenLast.has(last)) isDuplicate = true;
+          else seenLast.add(last);
+        }
+        if (sortByFirstRegion && item.firstRegion && item.firstRegion !== currentFirst) {
+          currentFirst = item.firstRegion;
+          html += `<tr class="group"><td colspan="${headers.length}">${currentFirst}</td></tr>`;
+        }
+        const cells = [item.cluster, item.numberOfVoxels, item.peakMNI];
+        regionColumns.forEach(col => cells.push(item[col] || '—'));
+        cells.push(item.peakIntensity);
+        if (addDuplicateColumn) cells.push(isDuplicate ? 'Yes' : 'No');
+        const cls = isDuplicate ? ' class="dup"' : '';
+        html += `<tr${cls} onclick="openDetail('${item.cluster}')">` +
+          cells.map((c, i) => `<td class="${i === 0 || i === 1 || i === cells.length - 1 - (addDuplicateColumn ? 1 : 0) ? 'num' : ''}">${c == null || c === '' ? '—' : c}</td>`).join('') +
+          '</tr>';
+      });
+      html += '</tbody></table></div>';
+      document.getElementById('generalOutput').innerHTML = html;
+      document.getElementById('exportGeneralCSV').style.display = 'inline-flex';
+    }
+
+    function openDetail(id) {
+      document.getElementById('clusterSelect').value = id;
+      showSection('detail');
+      showDetail();
+    }
+
+    function showDetail() {
+      const clusterNum = document.getElementById('clusterSelect').value;
+      renderDetail(getDetailData(parsedClusters, clusterNum));
+    }
+
+    function renderDetail(data) {
+      currentDetailData = data;
+      if (!data.length) {
+        document.getElementById('detailOutput').innerHTML = '<div class="table-wrap"><div class="empty">No voxel rows for this cluster.</div></div>';
+        document.getElementById('exportDetailCSV').style.display = 'none';
+        return;
+      }
+      const total = data.reduce((s, v) => s + v.voxelCount, 0);
+      let html = '<div class="table-wrap"><table><thead><tr><th># Voxels</th><th>Structure</th><th>Share</th></tr></thead><tbody>';
+      data.forEach(item => {
+        const pct = total ? Math.round(item.voxelCount / total * 100) : 0;
+        html += `<tr><td class="num">${item.voxelCount}</td><td>${item.structure}</td><td class="num">${pct}%</td></tr>`;
+      });
+      html += '</tbody></table></div>';
+      document.getElementById('detailOutput').innerHTML = html;
+      document.getElementById('exportDetailCSV').style.display = 'inline-flex';
+    }
+
+    function selectAllCheckboxes() {
+      ['firstRegion','lastRegion','ignoreUndefined','ignoreWhiteMatter','ignoreGrayMatter','sortByFirstRegion','highlightDuplicates','removeAALSuffix']
+        .forEach(id => { document.getElementById(id).checked = true; });
+      refresh();
+    }
+
+    function exportToCSV(type) {
+      if (type === 'general') {
+        const highlightDuplicates = document.getElementById('highlightDuplicates').checked;
+        const data = currentGeneralData;
+        const hasFirstAndLast = data[0] && data[0].firstRegion !== undefined && data[0].lastRegion !== undefined;
+        const addDuplicateColumn = highlightDuplicates && hasFirstAndLast;
+        let headers = ['Cluster', 'Number of Voxels', 'Peak MNI Coordinate'];
+        const regionColumns = [];
+        if (data[0]) {
+          if (data[0].peakRegion !== undefined) { headers.push('Peak MNI Coordinate Region'); regionColumns.push('peakRegion'); }
+          else {
+            if (data[0].firstRegion !== undefined) { headers.push('First Region'); regionColumns.push('firstRegion'); }
+            if (data[0].lastRegion !== undefined) { headers.push('Last Region'); regionColumns.push('lastRegion'); }
+          }
+        }
+        headers.push('Peak Intensity');
+        if (addDuplicateColumn) headers.push('Is Duplicate');
+        let csv = headers.join(',') + '\n';
+        let currentFirst = '';
+        const seenLast = new Set();
+        data.forEach(item => {
+          let isDuplicate = false;
+          if (addDuplicateColumn) {
+            const first = item.firstRegion || '';
+            const last = item.lastRegion || '';
+            if (first !== currentFirst) { currentFirst = first; seenLast.clear(); }
+            if (seenLast.has(last)) isDuplicate = true;
+            else seenLast.add(last);
+          }
+          const row = [item.cluster, item.numberOfVoxels, `"${item.peakMNI || ''}"`];
+          regionColumns.forEach(col => row.push(`"${item[col] || ''}"`));
+          row.push(item.peakIntensity);
+          if (addDuplicateColumn) row.push(isDuplicate ? 'Yes' : 'No');
+          csv += row.join(',') + '\n';
+        });
+        downloadFile(csv, 'general_data.csv', 'text/csv');
+      } else {
+        let csv = '# Voxels,Structure\n';
+        currentDetailData.forEach(item => { csv += `${item.voxelCount},"${item.structure}"\n`; });
+        downloadFile(csv, 'detail_data.csv', 'text/csv');
+      }
+    }
+
+    function downloadFile(content, fileName, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName; a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
