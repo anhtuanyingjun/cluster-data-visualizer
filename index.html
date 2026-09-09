@@ -12,6 +12,7 @@
         var t = localStorage.getItem("cluster-theme");
         var d = t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
         if (d) document.documentElement.classList.add("dark");
+        if (localStorage.getItem("cluster-lang") === "zh-Hant") document.documentElement.lang = "zh-Hant";
       } catch (e) {}
     })();
   </script>
@@ -21,21 +22,26 @@
   <div class="page">
     <header class="hero">
       <div>
-        <p class="kicker">xjView / CAT12</p>
-        <h1>Cluster Data Visualizer</h1>
-        <p class="lede">Paste a cluster report, shape the table, and export. Nothing leaves the browser.</p>
+        <h1 data-i18n="title">Cluster Data Visualizer</h1>
+        <p class="lede" data-i18n="lede">Paste a cluster report, shape the table, and export. Nothing leaves the browser.</p>
       </div>
-      <button class="btn btn-icon" id="themeToggle" type="button" onclick="toggleTheme()" aria-label="Switch theme"></button>
+      <div class="header-actions">
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button type="button" id="lang-en" aria-pressed="true" onclick="setLang('en')">EN</button>
+          <button type="button" id="lang-zh" aria-pressed="false" onclick="setLang('zh-Hant')">繁</button>
+        </div>
+        <button class="btn btn-icon" id="themeToggle" type="button" onclick="toggleTheme()" aria-label="Switch theme"></button>
+      </div>
     </header>
 
     <section class="panel">
-      <label class="panel-label" for="dataInput">Report</label>
-      <textarea id="dataInput" placeholder="Cluster 1&#10;Number of voxels: 1842&#10;Peak MNI coordinate: -22 -4 10&#10;…"></textarea>
+      <label class="panel-label" for="dataInput" data-i18n="report">Report</label>
+      <textarea id="dataInput" data-i18n-placeholder="placeholder" placeholder="Cluster 1&#10;Number of voxels: 1842&#10;Peak MNI coordinate: -22 -4 10&#10;…"></textarea>
       <div class="row">
-        <button class="btn btn-primary" type="button" onclick="loadData()">Load data</button>
-        <button class="btn btn-ghost" type="button" onclick="clearAndPaste()">Clear & paste</button>
-        <button class="btn btn-text" type="button" onclick="loadSample()">Sample</button>
-        <button class="btn btn-text" type="button" onclick="clearAll()">Clear</button>
+        <button class="btn btn-primary" type="button" onclick="loadData()" data-i18n="loadData">Load data</button>
+        <button class="btn btn-ghost" type="button" onclick="clearAndPaste()" data-i18n="clearPaste">Clear & paste</button>
+        <button class="btn btn-text" type="button" onclick="loadSample()" data-i18n="sample">Sample</button>
+        <button class="btn btn-text" type="button" onclick="clearAll()" data-i18n="clear">Clear</button>
       </div>
       <div id="warningMessage" class="note"></div>
     </section>
@@ -43,42 +49,42 @@
     <div id="workspace" class="workspace">
       <aside class="options">
         <fieldset class="opt-group">
-          <legend>Columns</legend>
-          <label class="check"><input type="checkbox" id="firstRegion" onchange="refresh()"> First region</label>
-          <label class="check"><input type="checkbox" id="lastRegion" onchange="refresh()"> Last region</label>
-          <label class="check"><input type="checkbox" id="sortByFirstRegion" onchange="refresh()"> Sort by first region</label>
-          <label class="check"><input type="checkbox" id="highlightDuplicates" onchange="refresh()"> Highlight duplicates</label>
+          <legend data-i18n="columns">Columns</legend>
+          <label class="check"><input type="checkbox" id="firstRegion" onchange="refresh()"> <span data-i18n="firstRegion">First region</span></label>
+          <label class="check"><input type="checkbox" id="lastRegion" onchange="refresh()"> <span data-i18n="lastRegion">Last region</span></label>
+          <label class="check"><input type="checkbox" id="sortByFirstRegion" onchange="refresh()"> <span data-i18n="sortFirst">Sort by first region</span></label>
+          <label class="check"><input type="checkbox" id="highlightDuplicates" onchange="refresh()"> <span data-i18n="highlightDup">Highlight duplicates</span></label>
         </fieldset>
         <fieldset class="opt-group">
-          <legend>Ignore</legend>
-          <label class="check"><input type="checkbox" id="ignoreUndefined" onchange="refresh()"> Undefined</label>
-          <label class="check"><input type="checkbox" id="ignoreWhiteMatter" onchange="refresh()"> White matter</label>
-          <label class="check"><input type="checkbox" id="ignoreGrayMatter" onchange="refresh()"> Gray matter</label>
-          <label class="check"><input type="checkbox" id="removeAALSuffix" onchange="refresh()"> (aal3v1) suffix</label>
+          <legend data-i18n="ignore">Ignore</legend>
+          <label class="check"><input type="checkbox" id="ignoreUndefined" onchange="refresh()"> <span data-i18n="ignoreUndefined">Undefined</span></label>
+          <label class="check"><input type="checkbox" id="ignoreWhiteMatter" onchange="refresh()"> <span data-i18n="ignoreWm">White matter</span></label>
+          <label class="check"><input type="checkbox" id="ignoreGrayMatter" onchange="refresh()"> <span data-i18n="ignoreGm">Gray matter</span></label>
+          <label class="check"><input type="checkbox" id="removeAALSuffix" onchange="refresh()"> <span data-i18n="aalSuffix">(aal3v1) suffix</span></label>
         </fieldset>
         <fieldset class="opt-group">
-          <legend>Voxels</legend>
+          <legend data-i18n="filterVoxels">Voxels</legend>
           <div class="filter-row">
             <select id="voxelFilterType" onchange="refresh()">
-              <option value="greater">Greater than</option>
-              <option value="less">Less than</option>
+              <option value="greater" data-i18n="greater">Greater than</option>
+              <option value="less" data-i18n="less">Less than</option>
             </select>
             <input type="number" id="voxelFilterValue" placeholder="n" oninput="refresh()">
           </div>
         </fieldset>
-        <button class="btn btn-ghost" type="button" onclick="selectAllCheckboxes()">Select all</button>
+        <button class="btn btn-ghost" type="button" onclick="selectAllCheckboxes()" data-i18n="selectAll">Select all</button>
       </aside>
 
-      <div>
+      <div class="stage">
         <div class="tabs" role="tablist">
-          <button class="tab" id="tab-general" type="button" role="tab" aria-selected="true" onclick="showSection('general')">General</button>
-          <button class="tab" id="tab-detail" type="button" role="tab" aria-selected="false" onclick="showSection('detail')">Detail</button>
+          <button class="tab" id="tab-general" type="button" role="tab" aria-selected="true" onclick="showSection('general')" data-i18n="general">General</button>
+          <button class="tab" id="tab-detail" type="button" role="tab" aria-selected="false" onclick="showSection('detail')" data-i18n="detail">Detail</button>
         </div>
         <div class="meta" id="meta"></div>
 
         <div id="generalSection">
           <div class="row" style="margin:0 0 10px">
-            <button class="btn btn-ghost" type="button" id="exportGeneralCSV" style="display:none" onclick="exportToCSV('general')">Export CSV</button>
+            <button class="btn btn-ghost" type="button" id="exportGeneralCSV" style="display:none" onclick="exportToCSV('general')" data-i18n="exportCsv">Export CSV</button>
           </div>
           <div id="generalOutput"></div>
         </div>
@@ -86,7 +92,7 @@
         <div id="detailSection" style="display:none">
           <div class="detail-bar">
             <select id="clusterSelect" onchange="showDetail()" aria-label="Cluster"></select>
-            <button class="btn btn-ghost" type="button" id="exportDetailCSV" style="display:none" onclick="exportToCSV('detail')">Export CSV</button>
+            <button class="btn btn-ghost" type="button" id="exportDetailCSV" style="display:none" onclick="exportToCSV('detail')" data-i18n="exportCsv">Export CSV</button>
           </div>
           <div id="detailOutput"></div>
         </div>

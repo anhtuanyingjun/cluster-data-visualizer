@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&display=swap");
 
 :root {
   color-scheme: light;
@@ -20,6 +20,7 @@
   --radius-sm: 8px;
   --ease: cubic-bezier(0.23, 1, 0.32, 1);
   --table-max: 28rem;
+  --font: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 html.dark {
@@ -47,20 +48,20 @@ body {
   min-height: 100dvh;
   background: var(--bg);
   color: var(--ink);
-  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  font-family: var(--font);
   font-size: 15px;
   line-height: 1.5;
 }
-h1, h2 { font-family: "Newsreader", Georgia, serif; font-weight: 500; letter-spacing: -0.03em; text-wrap: balance; margin: 0; }
+h1, h2 { font-family: var(--font); font-weight: 600; letter-spacing: -0.03em; text-wrap: balance; margin: 0; }
 p { text-wrap: pretty; }
 button { cursor: pointer; font-family: inherit; }
 button:disabled { cursor: default; opacity: 0.45; }
 
 .page { max-width: 1120px; margin: 0 auto; padding: 28px 20px 64px; }
 .hero { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; justify-content: space-between; margin-bottom: 24px; }
-.kicker { font-size: 11px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
 h1 { font-size: clamp(1.85rem, 3vw, 2.5rem); line-height: 1.15; }
 .lede { margin: 8px 0 0; color: var(--muted); max-width: 36rem; }
+.header-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
 .panel {
   background: var(--surface);
@@ -85,8 +86,8 @@ textarea {
   background: var(--bg);
   color: var(--ink);
   padding: 12px 14px;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 12px;
+  font-family: var(--font);
+  font-size: 13px;
   line-height: 1.55;
   resize: vertical;
 }
@@ -122,13 +123,37 @@ textarea:focus, select:focus, input:focus {
 .btn-icon:hover { background: var(--hover); }
 .btn-icon svg { width: 16px; height: 16px; }
 
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 2px;
+}
+.lang-switch button {
+  min-height: 32px;
+  min-width: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.lang-switch button[aria-pressed="true"] {
+  background: var(--primary);
+  color: var(--primary-fg);
+}
+
 .note { display: none; margin-top: 12px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--warn-fg); font-size: 13px; }
 .note.show { display: block; }
 
 .workspace { display: none; margin-top: 20px; }
 .workspace.open { display: grid; gap: 16px; }
 @media (min-width: 900px) {
-  .workspace.open { grid-template-columns: 250px 1fr; align-items: start; }
+  .workspace.open { grid-template-columns: 250px minmax(0, 1fr); align-items: start; }
 }
 
 .options { background: var(--surface); border: 1px solid var(--line); border-radius: calc(var(--radius) + 4px); padding: 16px; }
@@ -145,6 +170,7 @@ select, input[type="number"] {
   background: var(--surface); color: var(--ink); font-family: inherit; font-size: 14px; padding: 0 10px;
 }
 
+.stage { min-width: 0; }
 .tabs { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); margin-bottom: 12px; }
 .tab {
   border: 0; background: transparent; min-height: 34px; padding: 0 12px; border-radius: 8px;
@@ -155,37 +181,47 @@ select, input[type="number"] {
 .chip { font-size: 12px; color: var(--muted); background: var(--wash); border-radius: 999px; padding: 4px 10px; }
 
 .table-scroll {
+  width: 100%;
   max-height: var(--table-max);
   overflow: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
 }
-table.data { width: 100%; min-width: 42rem; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+table.data {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
 table.data th {
   position: sticky; top: 0; z-index: 2;
   background: var(--wash); color: var(--muted);
-  font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase;
-  text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap;
+  font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;
+  text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 table.data td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; background: var(--surface); }
 table.data tbody tr:last-child td { border-bottom: 0; }
 table.data .col-id {
+  width: 4.5rem;
   position: sticky; left: 0; z-index: 1;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   box-shadow: 1px 0 0 var(--line);
 }
 table.data thead .col-id { z-index: 3; background: var(--wash); }
 table.data .num {
+  width: 7rem;
   text-align: right;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-table.data .mni { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; white-space: nowrap; }
-table.data .region { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+table.data .mni { width: 8.25rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.data .dup { width: 6.25rem; }
+table.data .region { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 table.data tbody tr { cursor: pointer; }
 table.data tbody tr:hover td { background: var(--hover); }
 table.data tr.is-active td { background: var(--active); }
