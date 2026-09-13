@@ -163,6 +163,39 @@ function getDetailData(clusters, clusterNum) {
   return cluster ? cluster.voxels : [];
 }
 
+function nextSort(current, key) {
+  if (!current || current.key !== key) return { key: key, dir: "desc" };
+  return { key: key, dir: current.dir === "desc" ? "asc" : "desc" };
+}
+
+function compareSortValues(a, b) {
+  const empty = (v) => v === undefined || v === null || v === "";
+  if (empty(a) && empty(b)) return 0;
+  if (empty(a)) return 1;
+  if (empty(b)) return -1;
+  if (typeof a === "boolean" && typeof b === "boolean") return Number(a) - Number(b);
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  const sa = String(a).trim();
+  const sb = String(b).trim();
+  const na = Number(sa);
+  const nb = Number(sb);
+  if (sa !== "" && sb !== "" && !Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+  return sa.localeCompare(sb, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function sortByKey(rows, sort, valueOf) {
+  if (!sort || !sort.key) return rows;
+  const mul = sort.dir === "asc" ? 1 : -1;
+  return rows.slice().sort(function (a, b) {
+    return compareSortValues(valueOf(a, sort.key), valueOf(b, sort.key)) * mul;
+  });
+}
+
+function generalSortValue(row, key) {
+  if (key === "isDuplicate") return row.isDuplicate ? 1 : 0;
+  return row[key];
+}
+
 function columnHeaders(options, row) {
   const headers = ["cluster", "numberOfVoxels", "peakMNI"];
   if (row && row.peakRegion !== undefined) {

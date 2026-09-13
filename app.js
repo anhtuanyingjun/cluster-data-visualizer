@@ -35,6 +35,8 @@ let parsedClusters = [];
 let currentGeneralData = [];
 let currentDetailData = [];
 let currentLang = "en";
+let generalSort = null;
+let detailSort = null;
 
 const I18N = {
   en: {
@@ -259,6 +261,8 @@ function clearAll() {
   parsedClusters = [];
   currentGeneralData = [];
   currentDetailData = [];
+  generalSort = null;
+  detailSort = null;
   document.getElementById("workspace").classList.remove("open");
   document.getElementById("generalOutput").innerHTML = "";
   document.getElementById("detailOutput").innerHTML = "";
@@ -281,6 +285,8 @@ function showWarning(message) {
 function onDataLoaded(clusters) {
   if (!clusters.length) { showWarning(t().noClusters); return; }
   parsedClusters = clusters;
+  generalSort = null;
+  detailSort = null;
   document.getElementById("clusterSelect").innerHTML = clusters
     .map((c) => `<option value="${c.cluster}">${t().clusterOpt(c.cluster)}</option>`)
     .join("");
@@ -335,6 +341,21 @@ function escAttr(s) {
   });
 }
 
+function sortGeneralBy(key) {
+  generalSort = nextSort(generalSort, key);
+  refresh();
+}
+
+function sortDetailBy(key) {
+  detailSort = nextSort(detailSort, key);
+  showDetail();
+}
+
+function sortMark(key, sort) {
+  if (!sort || sort.key !== key) return '<span class="caret" aria-hidden="true"></span>';
+  return `<span class="caret on ${sort.dir}" aria-hidden="true"></span>`;
+}
+
 function renderGeneral(data) {
   currentGeneralData = data;
   const options = optionsFromUI();
@@ -354,9 +375,15 @@ function renderGeneral(data) {
   }
 
   const headers = columnHeaders(options, data[0]);
-  const sortByFirstRegion = options.sortByFirstRegion;
+  const activeSort = generalSort && headers.indexOf(generalSort.key) !== -1 ? generalSort : null;
+  data = sortByKey(data, activeSort, generalSortValue);
+  currentGeneralData = data;
+  const sortByFirstRegion = options.sortByFirstRegion && (!activeSort || activeSort.key === "firstRegion");
   let html = `<div class="table-scroll"><table class="data"><thead><tr>${
-    headers.map((h) => `<th class="${headerClass(h)}">${dict.headers[h] ?? h}</th>`).join("")
+    headers.map((h) => {
+      const aria = activeSort && activeSort.key === h ? (activeSort.dir === "desc" ? "descending" : "ascending") : "none";
+      return `<th class="sortable ${headerClass(h)}" aria-sort="${aria}" tabindex="0" onclick="sortGeneralBy('${h}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sortGeneralBy('${h}')}">${dict.headers[h] ?? h}${sortMark(h, activeSort)}</th>`;
+    }).join("")
   }</tr></thead><tbody>`;
 
   let currentFirst = "";
@@ -390,14 +417,23 @@ function showDetail() {
 }
 
 function renderDetail(data) {
+  const total = data.reduce((s, v) => s + v.voxelCount, 0);
+  data = sortByKey(data, detailSort, (v, key) => {
+    if (key === "structure") return v.structure;
+    if (key === "share") return total > 0 ? v.voxelCount / total : 0;
+    return v.voxelCount;
+  });
   currentDetailData = data;
   if (!data.length) {
     document.getElementById("detailOutput").innerHTML = `<div class="table-scroll"><div class="empty">${t().emptyDetail}</div></div>`;
     document.getElementById("exportDetailCSV").style.display = "none";
     return;
   }
-  const total = data.reduce((s, v) => s + v.voxelCount, 0);
-  let html = `<div class="table-scroll"><table class="data"><thead><tr><th class="num">${t().voxelsCol}</th><th>${t().structure}</th><th class="num">${t().share}</th></tr></thead><tbody>`;
+  let html = `<div class="table-scroll"><table class="data"><thead><tr>
+    <th class="sortable num" aria-sort="${detailSort && detailSort.key === "voxelCount" ? (detailSort.dir === "desc" ? "descending" : "ascending") : "none"}" onclick="sortDetailBy('voxelCount')">${t().voxelsCol}${sortMark("voxelCount", detailSort)}</th>
+    <th class="sortable" aria-sort="${detailSort && detailSort.key === "structure" ? (detailSort.dir === "desc" ? "descending" : "ascending") : "none"}" onclick="sortDetailBy('structure')">${t().structure}${sortMark("structure", detailSort)}</th>
+    <th class="sortable num" aria-sort="${detailSort && detailSort.key === "share" ? (detailSort.dir === "desc" ? "descending" : "ascending") : "none"}" onclick="sortDetailBy('share')">${t().share}${sortMark("share", detailSort)}</th>
+  </tr></thead><tbody>`;
   data.forEach((item) => {
     const pct = total ? Math.round((item.voxelCount / total) * 100) : 0;
     html += `<tr><td class="num">${item.voxelCount.toLocaleString()}</td><td class="region" title="${escAttr(item.structure)}">${item.structure}</td><td class="num">${pct}%</td></tr>`;

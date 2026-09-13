@@ -204,6 +204,24 @@ table.data th {
   text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+table.data th.sortable { cursor: pointer; user-select: none; }
+table.data th.sortable:hover,
+table.data th.sortable:focus-visible { color: var(--ink); outline: none; }
+table.data th .caret {
+  display: inline-block;
+  width: 0; height: 0;
+  margin-left: 6px;
+  vertical-align: middle;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  opacity: 0.3;
+}
+table.data th .caret.on { opacity: 1; color: var(--primary); }
+table.data th .caret.asc {
+  border-top: 0;
+  border-bottom: 5px solid currentColor;
+}
 table.data td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; background: var(--surface); }
 table.data tbody tr:last-child td { border-bottom: 0; }
 table.data .col-id {
