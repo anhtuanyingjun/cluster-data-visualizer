@@ -190,6 +190,35 @@ select, input[type="number"] {
   border-radius: var(--radius);
   background: var(--surface);
 }
+.table-shell { position: relative; min-width: 0; }
+.table-corner {
+  position: absolute; top: 0; right: 0; z-index: 6;
+  width: 28px; height: 28px; padding: 0; border: 0; background: transparent; cursor: pointer;
+}
+.table-corner::before {
+  content: ""; position: absolute; top: 0; right: 0;
+  border-style: solid; border-width: 0 28px 28px 0;
+  border-color: transparent var(--primary) transparent transparent;
+}
+.table-corner::after {
+  content: ""; position: absolute; top: 7px; right: 5px;
+  width: 8px; height: 8px;
+  border-right: 1.5px solid var(--primary-fg);
+  border-bottom: 1.5px solid var(--primary-fg);
+  transform: rotate(45deg);
+}
+.table-menu {
+  display: none; position: absolute; top: 32px; right: 8px; z-index: 7;
+  flex-direction: column; min-width: 11.5rem; padding: 4px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface);
+}
+.table-shell.open .table-menu { display: flex; }
+.table-menu button {
+  display: flex; align-items: center; min-height: 40px; padding: 0 12px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--ink);
+  font-size: 13px; font-weight: 500; text-align: left; font-family: inherit;
+}
+.table-menu button:hover { background: var(--hover); }
 table.data {
   width: 100%;
   table-layout: fixed;

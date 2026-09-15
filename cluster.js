@@ -239,3 +239,128 @@ function voxelsToCsv(voxels) {
   for (const v of voxels) lines.push(`${v.voxelCount},${csvEscape(v.structure)}`);
   return lines.join("\n");
 }
+
+function wrapTableText(ctx, text, maxWidth) {
+  const value = String(text || "").trim() || "—";
+  if (ctx.measureText(value).width <= maxWidth) return [value];
+  const words = value.split(/\s+/);
+  const lines = [];
+  let line = "";
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const next = line ? line + " " + word : word;
+    if (ctx.measureText(next).width <= maxWidth) {
+      line = next;
+      continue;
+    }
+    if (line) lines.push(line);
+    if (ctx.measureText(word).width <= maxWidth) {
+      line = word;
+    } else {
+      let chunk = "";
+      for (let c = 0; c < word.length; c++) {
+        const trial = chunk + word[c];
+        if (ctx.measureText(trial).width <= maxWidth) chunk = trial;
+        else {
+          if (chunk) lines.push(chunk);
+          chunk = word[c];
+        }
+      }
+      line = chunk;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : ["—"];
+}
+
+function drawTableCanvas(headers, rows, numeric) {
+  const SCALE = 2;
+  const PAD_X = 12;
+  const LINE = 18;
+  const HEADER_H = 34;
+  const FONT = '13px Inter, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", ui-sans-serif, sans-serif';
+  const FONT_HEAD = '600 11px Inter, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", ui-sans-serif, sans-serif';
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  ctx.font = FONT;
+  const mins = headers.map((h, i) => {
+    const base = numeric[i] ? 88 : 140;
+    return Math.max(base, ctx.measureText(h).width + PAD_X * 2);
+  });
+  const preferred = mins.map((min, i) => {
+    let widest = min;
+    for (let r = 0; r < rows.length; r++) {
+      const w = ctx.measureText(String(rows[r][i] || "")).width + PAD_X * 2;
+      if (w > widest) widest = Math.min(w, numeric[i] ? 140 : 280);
+    }
+    return widest;
+  });
+  const totalPref = preferred.reduce((s, w) => s + w, 0) || 640;
+  const target = Math.min(Math.max(totalPref, 640), 1280);
+  const widths = preferred.map((w) => (w / totalPref) * target);
+  const wrapped = rows.map((row) =>
+    row.map((cell, i) => wrapTableText(ctx, cell, Math.max(24, widths[i] - PAD_X * 2))),
+  );
+  const rowHeights = wrapped.map((cells) => {
+    let n = 1;
+    for (let i = 0; i < cells.length; i++) n = Math.max(n, cells[i].length);
+    return Math.max(HEADER_H - 4, n * LINE + 14);
+  });
+  const width = widths.reduce((s, w) => s + w, 0);
+  const height = HEADER_H + rowHeights.reduce((s, h) => s + h, 0);
+  canvas.width = Math.ceil(width * SCALE);
+  canvas.height = Math.ceil(height * SCALE);
+  ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#eef2f6";
+  ctx.fillRect(0, 0, width, HEADER_H);
+  ctx.strokeStyle = "#c5d0db";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
+  ctx.font = FONT_HEAD;
+  ctx.fillStyle = "#1a2a3a";
+  ctx.textBaseline = "middle";
+  let x = 0;
+  headers.forEach((h, i) => {
+    ctx.textAlign = numeric[i] ? "right" : "left";
+    ctx.fillText(String(h).toUpperCase(), numeric[i] ? x + widths[i] - PAD_X : x + PAD_X, HEADER_H / 2, widths[i] - PAD_X * 2);
+    x += widths[i];
+  });
+  ctx.font = FONT;
+  ctx.textBaseline = "top";
+  let y = HEADER_H;
+  wrapped.forEach((cells, r) => {
+    const h = rowHeights[r];
+    if (r % 2 === 1) {
+      ctx.fillStyle = "#f7f9fb";
+      ctx.fillRect(0, y, width, h);
+    }
+    ctx.strokeStyle = "#e2e8ee";
+    ctx.beginPath();
+    ctx.moveTo(0, y + 0.5);
+    ctx.lineTo(width, y + 0.5);
+    ctx.stroke();
+    x = 0;
+    cells.forEach((lines, i) => {
+      ctx.fillStyle = "#1a2a3a";
+      ctx.textAlign = numeric[i] ? "right" : "left";
+      const textX = numeric[i] ? x + widths[i] - PAD_X : x + PAD_X;
+      let ty = y + (h - lines.length * LINE) / 2;
+      lines.forEach((line) => {
+        ctx.fillText(line, textX, ty, widths[i] - PAD_X * 2);
+        ty += LINE;
+      });
+      x += widths[i];
+    });
+    y += h;
+  });
+  return canvas;
+}
+
+function tableToPngBlob(headers, rows, numeric) {
+  const canvas = drawTableCanvas(headers, rows, numeric);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("png"))), "image/png");
+  });
+}

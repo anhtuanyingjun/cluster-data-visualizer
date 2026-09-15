@@ -80,6 +80,12 @@ const I18N = {
     voxelsCol: "# Voxels",
     structure: "Structure",
     share: "Share",
+    tableImage: "Table image for report",
+    savePng: "Save PNG",
+    copyImage: "Copy image",
+    toastImageSaved: "PNG downloaded — drop it into your report.",
+    toastImageCopied: "Image copied. Paste into Word, PowerPoint, or a figure.",
+    toastImageFail: "Could not create the table image.",
     headers: {
       cluster: "Cluster",
       numberOfVoxels: "Number of Voxels",
@@ -132,6 +138,12 @@ const I18N = {
     voxelsCol: "體素數",
     structure: "結構",
     share: "佔比",
+    tableImage: "表格圖片（報告用）",
+    savePng: "下載 PNG",
+    copyImage: "複製圖片",
+    toastImageSaved: "已下載 PNG，可插入報告。",
+    toastImageCopied: "已複製圖片，可貼到 Word、PowerPoint 或圖檔。",
+    toastImageFail: "無法建立表格圖片。",
     headers: {
       cluster: "叢集",
       numberOfVoxels: "體素數量",
@@ -379,12 +391,12 @@ function renderGeneral(data) {
   data = sortByKey(data, activeSort, generalSortValue);
   currentGeneralData = data;
   const sortByFirstRegion = options.sortByFirstRegion && (!activeSort || activeSort.key === "firstRegion");
-  let html = `<div class="table-scroll"><table class="data"><thead><tr>${
+  let html = wrapTableShell("general", `<div class="table-scroll"><table class="data"><thead><tr>${
     headers.map((h) => {
       const aria = activeSort && activeSort.key === h ? (activeSort.dir === "desc" ? "descending" : "ascending") : "none";
       return `<th class="sortable ${headerClass(h)}" aria-sort="${aria}" tabindex="0" onclick="sortGeneralBy('${h}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sortGeneralBy('${h}')}">${dict.headers[h] ?? h}${sortMark(h, activeSort)}</th>`;
     }).join("")
-  }</tr></thead><tbody>`;
+  }</tr></thead><tbody>`);
 
   let currentFirst = "";
   data.forEach((item) => {
@@ -401,6 +413,7 @@ function renderGeneral(data) {
     html += "</tr>";
   });
   html += "</tbody></table></div>";
+  html += "</div>";
   document.getElementById("generalOutput").innerHTML = html;
   document.getElementById("exportGeneralCSV").style.display = "inline-flex";
 }
@@ -429,16 +442,17 @@ function renderDetail(data) {
     document.getElementById("exportDetailCSV").style.display = "none";
     return;
   }
-  let html = `<div class="table-scroll"><table class="data"><thead><tr>
+  let html = wrapTableShell("detail", `<div class="table-scroll"><table class="data"><thead><tr>
     <th class="sortable num" aria-sort="${detailSort && detailSort.key === "voxelCount" ? (detailSort.dir === "desc" ? "descending" : "ascending") : "none"}" onclick="sortDetailBy('voxelCount')">${t().voxelsCol}${sortMark("voxelCount", detailSort)}</th>
     <th class="sortable" aria-sort="${detailSort && detailSort.key === "structure" ? (detailSort.dir === "desc" ? "descending" : "ascending") : "none"}" onclick="sortDetailBy('structure')">${t().structure}${sortMark("structure", detailSort)}</th>
     <th class="sortable num" aria-sort="${detailSort && detailSort.key === "share" ? (detailSort.dir === "desc" ? "descending" : "ascending") : "none"}" onclick="sortDetailBy('share')">${t().share}${sortMark("share", detailSort)}</th>
-  </tr></thead><tbody>`;
+  </tr></thead><tbody>`);
   data.forEach((item) => {
     const pct = total ? Math.round((item.voxelCount / total) * 100) : 0;
     html += `<tr><td class="num">${item.voxelCount.toLocaleString()}</td><td class="region" title="${escAttr(item.structure)}">${item.structure}</td><td class="num">${pct}%</td></tr>`;
   });
   html += "</tbody></table></div>";
+  html += "</div>";
   document.getElementById("detailOutput").innerHTML = html;
   document.getElementById("exportDetailCSV").style.display = "inline-flex";
 }
@@ -466,6 +480,82 @@ function downloadFile(content, fileName) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+function wrapTableShell(kind, inner) {
+  const dict = t();
+  return `<div class="table-shell">
+    <button type="button" class="table-corner" aria-label="${escAttr(dict.tableImage)}" title="${escAttr(dict.tableImage)}" onclick="toggleTableMenu(event)"></button>
+    <div class="table-menu">
+      <button type="button" onclick="exportTableImage('${kind}','save')">${dict.savePng}</button>
+      <button type="button" onclick="exportTableImage('${kind}','copy')">${dict.copyImage}</button>
+    </div>
+    ${inner}`;
+}
+
+function toggleTableMenu(event) {
+  event.stopPropagation();
+  const shell = event.currentTarget.closest(".table-shell");
+  document.querySelectorAll(".table-shell.open").forEach((el) => {
+    if (el !== shell) el.classList.remove("open");
+  });
+  shell.classList.toggle("open");
+}
+
+function tableImagePayload(kind) {
+  const dict = t();
+  if (kind === "detail") {
+    const total = currentDetailData.reduce((s, v) => s + v.voxelCount, 0);
+    return {
+      headers: [dict.voxelsCol, dict.structure, dict.share],
+      rows: currentDetailData.map((v) => [
+        v.voxelCount.toLocaleString(),
+        v.structure,
+        (total ? Math.round((v.voxelCount / total) * 100) : 0) + "%",
+      ]),
+      numeric: [true, false, true],
+      fileName: "detail_table.png",
+    };
+  }
+  const options = optionsFromUI();
+  const headers = columnHeaders(options, currentGeneralData[0]);
+  return {
+    headers: headers.map((h) => dict.headers[h] || h),
+    rows: currentGeneralData.map((row) => headers.map((h) => displayCell(row, h))),
+    numeric: headers.map((h) => h === "cluster" || h === "numberOfVoxels" || h === "peakIntensity"),
+    fileName: "general_table.png",
+  };
+}
+
+function exportTableImage(kind, mode) {
+  const payload = tableImagePayload(kind);
+  if (!payload.rows.length) {
+    showWarning(t().toastImageFail);
+    return;
+  }
+  tableToPngBlob(payload.headers, payload.rows, payload.numeric)
+    .then((blob) => {
+      if (mode === "save") {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = payload.fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        showWarning(t().toastImageSaved);
+      } else {
+        return navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]).then(() => {
+          showWarning(t().toastImageCopied);
+        });
+      }
+    })
+    .catch(() => showWarning(t().toastImageFail));
+}
+
+document.addEventListener("mousedown", (event) => {
+  if (!event.target.closest(".table-shell")) {
+    document.querySelectorAll(".table-shell.open").forEach((el) => el.classList.remove("open"));
+  }
+});
 
 document.addEventListener("DOMContentLoaded", () => {
   currentLang = localStorage.getItem("cluster-lang") === "zh-Hant" ? "zh-Hant" : "en";
