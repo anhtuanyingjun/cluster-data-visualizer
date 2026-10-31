@@ -172,6 +172,10 @@ select, input[type="number"] {
 
 .stage { min-width: 0; }
 .tabs { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); margin-bottom: 12px; }
+.format-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+body.format-cat12 .xj-only,
+body.format-cat12 .tabs { display: none; }
+table.data td.wrap { white-space: normal; overflow: visible; text-overflow: unset; }
 .tab {
   border: 0; background: transparent; min-height: 34px; padding: 0 12px; border-radius: 8px;
   font-size: 13px; font-weight: 500; color: var(--muted);

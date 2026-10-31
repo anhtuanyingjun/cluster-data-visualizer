@@ -364,3 +364,121 @@ function tableToPngBlob(headers, rows, numeric) {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("png"))), "image/png");
   });
 }
+
+const CAT12_PEAK = /^\s*([0-9]*\.?[0-9]+(?:[eE][+-]?\d+)?)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d+(?:\.\d+)?)\s*%\s+(.+?)\s*$/;
+const CAT12_CONT = /^\s*(\d+(?:\.\d+)?)\s*%\s+(.+?)\s*$/;
+const CAT12_LABELS = ["p-value", "Cluster-Size", "xyz [mm]", "Overlap of atlas region"];
+
+function parseCat12Report(text) {
+  const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+  const clusters = [];
+  let title = "";
+  let atlas = "";
+  let current = null;
+  let seenHeader = false;
+  lines.forEach((raw) => {
+    const line = raw.replace(/\t/g, " ").replace(/\u00a0/g, " ");
+    const trimmed = line.trim();
+    if (!trimmed || /^_+$/.test(trimmed)) return;
+    if (/^p-value\b/i.test(trimmed)) {
+      seenHeader = true;
+      return;
+    }
+    const peak = line.match(CAT12_PEAK);
+    if (peak) {
+      current = {
+        id: String(clusters.length + 1),
+        pValue: peak[1],
+        pValueNum: Number(peak[1]),
+        clusterSize: parseInt(peak[2], 10),
+        xyz: peak[3] + " " + peak[4] + " " + peak[5],
+        overlaps: [{ percent: peak[6] + "%", region: peak[7].trim() }],
+      };
+      clusters.push(current);
+      return;
+    }
+    const cont = line.match(CAT12_CONT);
+    if (cont && current) {
+      current.overlaps.push({ percent: cont[1] + "%", region: cont[2].trim() });
+      return;
+    }
+    if (!seenHeader && clusters.length === 0) {
+      if (!title && /[\\/]|\.nii/i.test(trimmed)) title = trimmed;
+      else if (!atlas && /^[A-Za-z0-9_ -]+$/.test(trimmed)) atlas = trimmed;
+    }
+  });
+  return { title: title, atlas: atlas, clusters: clusters };
+}
+
+function cat12Rows(report, filterType, filterValue) {
+  let clusters = report.clusters.slice();
+  if (filterValue !== null && filterValue !== "") {
+    const value = parseInt(String(filterValue), 10);
+    if (!isNaN(value)) {
+      clusters = clusters.filter((c) =>
+        filterType === "less" ? c.clusterSize < value : c.clusterSize > value,
+      );
+    }
+  }
+  const rows = [];
+  clusters.forEach((cluster) => {
+    cluster.overlaps.forEach((overlap, index) => {
+      rows.push({
+        clusterId: cluster.id,
+        isFirst: index === 0,
+        pValue: cluster.pValue,
+        pValueNum: cluster.pValueNum,
+        clusterSize: cluster.clusterSize,
+        xyz: cluster.xyz,
+        overlap: overlap.percent + " " + overlap.region,
+      });
+    });
+  });
+  return rows;
+}
+
+function sortCat12Rows(rows, sort) {
+  if (!sort || !sort.key || !rows.length) return rows;
+  const mul = sort.dir === "asc" ? 1 : -1;
+  const groups = new Map();
+  const order = [];
+  rows.forEach((row) => {
+    if (!groups.has(row.clusterId)) {
+      groups.set(row.clusterId, []);
+      order.push(row.clusterId);
+    }
+    groups.get(row.clusterId).push(row);
+  });
+  if (sort.key === "overlap") {
+    return rows.slice().sort((a, b) => compareSortValues(a.overlap, b.overlap) * mul);
+  }
+  order.sort((a, b) => {
+    const ra = groups.get(a)[0];
+    const rb = groups.get(b)[0];
+    const va = sort.key === "clusterSize" ? ra.clusterSize : sort.key === "xyz" ? ra.xyz : ra.pValueNum;
+    const vb = sort.key === "clusterSize" ? rb.clusterSize : sort.key === "xyz" ? rb.xyz : rb.pValueNum;
+    return compareSortValues(va, vb) * mul;
+  });
+  const out = [];
+  order.forEach((id) => groups.get(id).forEach((row) => out.push(row)));
+  return out;
+}
+
+function cat12Cell(row, key) {
+  if (key === "overlap") return row.overlap;
+  if (!row.isFirst) return "";
+  if (key === "pValue") return row.pValue;
+  if (key === "clusterSize") return row.clusterSize.toLocaleString();
+  if (key === "xyz") return row.xyz;
+  return "";
+}
+
+function cat12ToCsv(rows) {
+  const keys = ["pValue", "clusterSize", "xyz", "overlap"];
+  const lines = [CAT12_LABELS.join(",")];
+  rows.forEach((row) => {
+    lines.push(keys.map((h) => csvEscape(cat12Cell(row, h))).join(","));
+  });
+  return lines.join("\n");
+}
+

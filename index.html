@@ -35,6 +35,13 @@
     </header>
 
     <section class="panel">
+      <div class="format-row">
+        <span class="panel-label" data-i18n="format" style="margin:0">Format</span>
+        <div class="lang-switch" role="group" aria-label="Format">
+          <button type="button" id="fmt-xj" aria-pressed="true" onclick="setFormat('xjview')">xjView</button>
+          <button type="button" id="fmt-cat" aria-pressed="false" onclick="setFormat('cat12')">CAT12</button>
+        </div>
+      </div>
       <label class="panel-label" for="dataInput" data-i18n="report">Report</label>
       <textarea id="dataInput" data-i18n-placeholder="placeholder" placeholder="Cluster 1&#10;Number of voxels: 1842&#10;Peak MNI coordinate: -22 -4 10&#10;…"></textarea>
       <div class="row">
@@ -48,14 +55,14 @@
 
     <div id="workspace" class="workspace">
       <aside class="options">
-        <fieldset class="opt-group">
+        <fieldset class="opt-group xj-only">
           <legend data-i18n="columns">Columns</legend>
           <label class="check"><input type="checkbox" id="firstRegion" onchange="refresh()"> <span data-i18n="firstRegion">First region</span></label>
           <label class="check"><input type="checkbox" id="lastRegion" onchange="refresh()"> <span data-i18n="lastRegion">Last region</span></label>
           <label class="check"><input type="checkbox" id="sortByFirstRegion" onchange="refresh()"> <span data-i18n="sortFirst">Sort by first region</span></label>
           <label class="check"><input type="checkbox" id="highlightDuplicates" onchange="refresh()"> <span data-i18n="highlightDup">Highlight duplicates</span></label>
         </fieldset>
-        <fieldset class="opt-group">
+        <fieldset class="opt-group xj-only">
           <legend data-i18n="ignore">Ignore</legend>
           <label class="check"><input type="checkbox" id="ignoreUndefined" onchange="refresh()"> <span data-i18n="ignoreUndefined">Undefined</span></label>
           <label class="check"><input type="checkbox" id="ignoreWhiteMatter" onchange="refresh()"> <span data-i18n="ignoreWm">White matter</span></label>
@@ -63,7 +70,7 @@
           <label class="check"><input type="checkbox" id="removeAALSuffix" onchange="refresh()"> <span data-i18n="aalSuffix">(aal3v1) suffix</span></label>
         </fieldset>
         <fieldset class="opt-group">
-          <legend data-i18n="filterVoxels">Voxels</legend>
+          <legend id="voxelLegend" data-i18n="filterVoxels">Voxels</legend>
           <div class="filter-row">
             <select id="voxelFilterType" onchange="refresh()">
               <option value="greater" data-i18n="greater">Greater than</option>
@@ -72,7 +79,7 @@
             <input type="number" id="voxelFilterValue" placeholder="n" oninput="refresh()">
           </div>
         </fieldset>
-        <button class="btn btn-ghost" type="button" onclick="selectAllCheckboxes()" data-i18n="selectAll">Select all</button>
+        <button class="btn btn-ghost xj-only" type="button" onclick="selectAllCheckboxes()" data-i18n="selectAll">Select all</button>
       </aside>
 
       <div class="stage">

@@ -31,10 +31,35 @@ Peak intensity: 3.41
 46	Cuneus_R (aal3v1)
 `;
 
+const SAMPLE_CAT12 = `______________________________________________________
+D:\\NormalizationVBM\\PD_Copy_Test\\ARM\\kq_6mm\\TFCE_log_pFWE_0005.nii: Positive effects
+cat12_neuromorphometrics
+______________________________________________________
+p-value	Cluster-Size	    xyz [mm]   	Overlap of atlas region
+2.4e-06	       26520	 -45    4  -12	  5%	Right MSFG superior frontal gyrus medial segment
+       	            	               	  4%	Left AIns anterior insula
+       	            	               	  4%	Right AIns anterior insula
+       	            	               	  2%	Right Cerebral White Matter
+ 0.0055	         215	 -21   14    0	 73%	Left Putamen
+       	            	               	 26%	Left Cerebral White Matter
+ 0.0081	         157	 -64  -34  -26	 75%	Left ITG inferior temporal gyrus
+       	            	               	 25%	Left MTG middle temporal gyrus
+ 0.0082	          78	 -54  -75   16	 76%	Left MOG middle occipital gyrus
+       	            	               	 23%	Left AnG angular gyrus
+ 0.0086	          41	   4  -20   27	 83%	Right MCgG middle cingulate gyrus
+       	            	               	 12%	Right Cerebral White Matter
+ 0.0091	           1	 -64   -8   38	100%	Left PoG postcentral gyrus
+ 0.0098	           6	 -18  -27  -16	 83%	Left PHG parahippocampal gyrus
+       	            	               	 17%	Left Ventral DC
+`;
+
 let parsedClusters = [];
 let currentGeneralData = [];
 let currentDetailData = [];
 let currentLang = "en";
+let reportFormat = "xjview";
+let catReport = null;
+let catSort = null;
 let generalSort = null;
 let detailSort = null;
 
@@ -64,6 +89,10 @@ const I18N = {
     general: "General",
     detail: "Detail",
     exportCsv: "Export CSV",
+    format: "Format",
+    reportHintCat: "CAT12 table: p-value, cluster size, xyz, atlas overlap.",
+    placeholderCat: "p-value  Cluster-Size  xyz [mm]  Overlap of atlas region",
+    filterSize: "Cluster size",
     placeholder: "Cluster 1\nNumber of voxels: 1842\nPeak MNI coordinate: -22 -4 10\n…",
     pasteFirst: "Paste a cluster report first.",
     invalid: "Invalid data format. Please check the input.",
@@ -122,6 +151,10 @@ const I18N = {
     general: "總覽",
     detail: "明細",
     exportCsv: "匯出 CSV",
+    format: "格式",
+    reportHintCat: "CAT12 表格：p 值、叢集大小、xyz、圖譜重疊。",
+    placeholderCat: "p-value  Cluster-Size  xyz [mm]  Overlap of atlas region",
+    filterSize: "叢集大小",
     placeholder: "Cluster 1\nNumber of voxels: 1842\nPeak MNI coordinate: -22 -4 10\n…",
     pasteFirst: "請先貼上叢集報告。",
     invalid: "資料格式不正確，請檢查內容。",
@@ -182,6 +215,15 @@ function applyI18n() {
   if (themeBtn) {
     const dark = document.documentElement.classList.contains("dark");
     themeBtn.setAttribute("aria-label", dark ? dict.themeLight : dict.themeDark);
+  }
+  if (reportFormat === "cat12") {
+    const input = document.getElementById("dataInput");
+    const legend = document.getElementById("voxelLegend");
+    if (input) input.placeholder = dict.placeholderCat;
+    if (legend) legend.textContent = dict.filterSize;
+  }
+  if (reportFormat === "cat12" && catReport) {
+    renderCat12();
   }
   if (parsedClusters.length) {
     const select = document.getElementById("clusterSelect");
@@ -252,6 +294,16 @@ function loadData() {
   const text = document.getElementById("dataInput").value.trim();
   if (!text) { showWarning(t().pasteFirst); return; }
   try {
+    if (reportFormat === "cat12") {
+      catReport = parseCat12Report(text);
+      catSort = null;
+      parsedClusters = [];
+      if (!catReport.clusters.length) { showWarning(t().noClusters); return; }
+      document.getElementById("workspace").classList.add("open");
+      showSection("general");
+      renderCat12();
+      return;
+    }
     const clusters = parseClusterData(text);
     onDataLoaded(clusters);
   } catch {
@@ -259,7 +311,30 @@ function loadData() {
   }
 }
 
+function setFormat(fmt) {
+  reportFormat = fmt === "cat12" ? "cat12" : "xjview";
+  document.body.classList.toggle("format-cat12", reportFormat === "cat12");
+  const xj = document.getElementById("fmt-xj");
+  const cat = document.getElementById("fmt-cat");
+  if (xj) xj.setAttribute("aria-pressed", reportFormat === "xjview" ? "true" : "false");
+  if (cat) cat.setAttribute("aria-pressed", reportFormat === "cat12" ? "true" : "false");
+  const input = document.getElementById("dataInput");
+  const legend = document.getElementById("voxelLegend");
+  if (input) input.placeholder = reportFormat === "cat12" ? t().placeholderCat : t().placeholder;
+  if (legend) legend.textContent = reportFormat === "cat12" ? t().filterSize : t().filterVoxels;
+  catReport = null;
+  parsedClusters = [];
+  document.getElementById("dataInput").value = "";
+  document.getElementById("workspace").classList.remove("open");
+  document.getElementById("generalOutput").innerHTML = "";
+}
+
 function loadSample() {
+  if (reportFormat === "cat12") {
+    document.getElementById("dataInput").value = SAMPLE_CAT12;
+    loadData();
+    return;
+  }
   document.getElementById("dataInput").value = SAMPLE;
   document.getElementById("ignoreUndefined").checked = true;
   document.getElementById("ignoreWhiteMatter").checked = true;
@@ -271,6 +346,8 @@ function loadSample() {
 function clearAll() {
   document.getElementById("dataInput").value = "";
   parsedClusters = [];
+  catReport = null;
+  catSort = null;
   currentGeneralData = [];
   currentDetailData = [];
   generalSort = null;
@@ -316,6 +393,10 @@ function showSection(section) {
 }
 
 function refresh() {
+  if (reportFormat === "cat12") {
+    if (catReport) renderCat12();
+    return;
+  }
   if (!parsedClusters.length) return;
   renderGeneral(getGeneralData(parsedClusters, optionsFromUI()));
 }
@@ -366,6 +447,62 @@ function sortDetailBy(key) {
 function sortMark(key, sort) {
   if (!sort || sort.key !== key) return '<span class="caret" aria-hidden="true"></span>';
   return `<span class="caret on ${sort.dir}" aria-hidden="true"></span>`;
+}
+
+function sortCatBy(key) {
+  catSort = nextSort(catSort, key);
+  renderCat12();
+}
+
+function renderCat12() {
+  if (!catReport) return;
+  const options = optionsFromUI();
+  const dict = t();
+  let rows = cat12Rows(catReport, options.voxelFilterType, options.voxelFilterValue);
+  rows = sortCat12Rows(rows, catSort);
+  currentGeneralData = rows;
+  const ids = {};
+  let voxels = 0;
+  rows.forEach((row) => {
+    if (ids[row.clusterId]) return;
+    ids[row.clusterId] = true;
+    voxels += row.clusterSize;
+  });
+  const count = Object.keys(ids).length;
+  const hidden = catReport.clusters.length - count;
+  document.getElementById("meta").innerHTML =
+    `<span class="chip">${dict.clusters(count)}</span>` +
+    `<span class="chip">${dict.voxels(voxels)}</span>` +
+    (hidden > 0 ? `<span class="chip">${dict.hidden(hidden)}</span>` : "") +
+    (catReport.atlas || catReport.title
+      ? `<span class="chip">${escAttr(catReport.atlas || catReport.title)}</span>`
+      : "");
+  if (!rows.length) {
+    document.getElementById("generalOutput").innerHTML = `<div class="table-scroll"><div class="empty">${dict.emptyFilter}</div></div>`;
+    document.getElementById("exportGeneralCSV").style.display = "none";
+    return;
+  }
+  const keys = ["pValue", "clusterSize", "xyz", "overlap"];
+  const classes = { pValue: "num", clusterSize: "num", xyz: "mni", overlap: "wrap" };
+  let html = wrapTableShell("cat12", `<div class="table-scroll"><table class="data"><thead><tr>${
+    keys.map((key, i) => {
+      const aria = catSort && catSort.key === key ? (catSort.dir === "desc" ? "descending" : "ascending") : "none";
+      return `<th class="sortable ${classes[key]}" aria-sort="${aria}" onclick="sortCatBy('${key}')">${CAT12_LABELS[i]}${sortMark(key, catSort)}</th>`;
+    }).join("")
+  }</tr></thead><tbody>`);
+  rows.forEach((row) => {
+    html += "<tr>";
+    keys.forEach((key) => {
+      const text = cat12Cell(row, key);
+      html += `<td class="${classes[key]}" title="${escAttr(text)}">${text}</td>`;
+    });
+    html += "</tr>";
+  });
+  html += "</tbody></table></div></div>";
+  document.getElementById("generalOutput").innerHTML = html;
+  document.getElementById("exportGeneralCSV").style.display = "inline-flex";
+  document.getElementById("detailSection").style.display = "none";
+  document.getElementById("generalSection").style.display = "";
 }
 
 function renderGeneral(data) {
@@ -464,6 +601,10 @@ function selectAllCheckboxes() {
 }
 
 function exportToCSV(type) {
+  if (reportFormat === "cat12") {
+    downloadFile(cat12ToCsv(currentGeneralData), "cat12_data.csv");
+    return;
+  }
   if (type === "general") {
     downloadFile(rowsToCsv(currentGeneralData, optionsFromUI()), "general_data.csv");
   } else {
@@ -503,6 +644,15 @@ function toggleTableMenu(event) {
 
 function tableImagePayload(kind) {
   const dict = t();
+  if (kind === "cat12") {
+    const keys = ["pValue", "clusterSize", "xyz", "overlap"];
+    return {
+      headers: CAT12_LABELS.slice(),
+      rows: currentGeneralData.map((row) => keys.map((key) => cat12Cell(row, key))),
+      numeric: [true, true, false, false],
+      fileName: "cat12_table.png",
+    };
+  }
   if (kind === "detail") {
     const total = currentDetailData.reduce((s, v) => s + v.voxelCount, 0);
     return {
