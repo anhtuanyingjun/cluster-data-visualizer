@@ -489,3 +489,26 @@ function cat12ToCsv(rows) {
   return lines.join("\n");
 }
 
+function xyzKey(value) {
+  if (!value) return "";
+  const parts = String(value).trim().split(/[\s,]+/).filter(Boolean);
+  if (parts.length < 3) return "";
+  const nums = parts.slice(0, 3).map((part) => parseInt(part, 10));
+  if (nums.some((n) => isNaN(n))) return "";
+  return nums.join(",");
+}
+
+function sharedXyzKeys(xjRows, catRows) {
+  const xj = new Set();
+  xjRows.forEach((row) => {
+    const key = xyzKey(row.peakMNI);
+    if (key) xj.add(key);
+  });
+  const shared = new Set();
+  catRows.forEach((row) => {
+    const key = xyzKey(row.xyz);
+    if (key && xj.has(key)) shared.add(key);
+  });
+  return shared;
+}
+

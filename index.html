@@ -68,16 +68,33 @@
         <div class="lang-switch" role="group" aria-label="Format">
           <button type="button" id="fmt-xj" aria-pressed="true" onclick="setFormat('xjview')">xjView</button>
           <button type="button" id="fmt-cat" aria-pressed="false" onclick="setFormat('cat12')">CAT12</button>
+          <button type="button" id="fmt-both" aria-pressed="false" onclick="setFormat('both')" data-i18n="formatBoth">Both</button>
         </div>
       </div>
-      <label class="panel-label" for="dataInput" data-i18n="report">Report</label>
-      <textarea id="dataInput" data-i18n-placeholder="placeholder" placeholder="Cluster 1&#10;Number of voxels: 1842&#10;Peak MNI coordinate: -22 -4 10&#10;…"></textarea>
+      <div id="singleInput" class="single-input">
+        <label class="panel-label" for="dataInput" data-i18n="report">Report</label>
+        <textarea id="dataInput" data-i18n-placeholder="placeholder" placeholder="Cluster 1&#10;Number of voxels: 1842&#10;Peak MNI coordinate: -22 -4 10&#10;…"></textarea>
+      </div>
+      <div id="splitInput" class="split-input split-only">
+        <label class="panel-label">
+          xjView
+          <textarea id="xjInput" data-i18n-placeholder="placeholder" placeholder="Cluster 1&#10;Number of voxels: …"></textarea>
+        </label>
+        <label class="panel-label">
+          CAT12
+          <textarea id="catInput" data-i18n-placeholder="placeholderCat" placeholder="p-value  Cluster-Size  xyz [mm]  …"></textarea>
+        </label>
+      </div>
       <div class="row">
         <button class="btn btn-primary" type="button" onclick="loadData()" data-i18n="loadData">Load data</button>
         <button class="btn btn-ghost" type="button" onclick="clearAndPaste()" data-i18n="clearPaste">Clear & paste</button>
         <button class="btn btn-text" type="button" onclick="loadSample()" data-i18n="sample">Sample</button>
         <button class="btn btn-text" type="button" onclick="clearAll()" data-i18n="clear">Clear</button>
       </div>
+      <label class="check split-only" id="matchXyzRow">
+        <input type="checkbox" id="matchXyz" checked onchange="refresh()">
+        <span data-i18n="sharedXyz">Matching xyz</span>
+      </label>
       <div id="warningMessage" class="note"></div>
     </section>
 

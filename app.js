@@ -58,6 +58,7 @@ let currentGeneralData = [];
 let currentDetailData = [];
 let currentLang = "en";
 let reportFormat = "xjview";
+let activeShared = null;
 let catReport = null;
 let catSort = null;
 let generalSort = null;
@@ -109,6 +110,9 @@ const I18N = {
     accent: "Interface color",
     accentCode: "Color code",
     resetColor: "Default",
+    sharedXyz: "Matching xyz",
+    sharedNone: "No shared xyz between the two reports.",
+    formatBoth: "Both",
     voxelsCol: "# Voxels",
     structure: "Structure",
     share: "Share",
@@ -174,6 +178,9 @@ const I18N = {
     accent: "介面顏色",
     accentCode: "色碼",
     resetColor: "預設",
+    sharedXyz: "相同 xyz",
+    sharedNone: "兩份報告沒有相同的 xyz。",
+    formatBoth: "同時",
     voxelsCol: "體素數",
     structure: "結構",
     share: "佔比",
@@ -234,10 +241,11 @@ function applyI18n() {
     if (input) input.placeholder = dict.placeholderCat;
     if (legend) legend.textContent = dict.filterSize;
   }
-  if (reportFormat === "cat12" && catReport) {
+  if (reportFormat === "both") {
+    if (parsedClusters.length || (catReport && catReport.clusters.length)) renderBoth();
+  } else if (reportFormat === "cat12" && catReport) {
     renderCat12();
-  }
-  if (parsedClusters.length) {
+  } else if (parsedClusters.length) {
     const select = document.getElementById("clusterSelect");
     const selected = select.value;
     select.innerHTML = parsedClusters
@@ -470,13 +478,25 @@ function optionsFromUI() {
 }
 
 function loadData() {
-  const text = document.getElementById("dataInput").value.trim();
-  if (!text) { showWarning(t().pasteFirst); return; }
   try {
+    if (reportFormat === "both") {
+      const xjText = document.getElementById("xjInput").value.trim();
+      const catText = document.getElementById("catInput").value.trim();
+      if (!xjText && !catText) { showWarning(t().pasteFirst); return; }
+      parsedClusters = xjText ? parseClusterData(xjText) : [];
+      catReport = catText ? parseCat12Report(catText) : { title: "", atlas: "", clusters: [] };
+      generalSort = null;
+      catSort = null;
+      if (!parsedClusters.length && !catReport.clusters.length) { showWarning(t().noClusters); return; }
+      document.getElementById("workspace").classList.add("open");
+      renderBoth();
+      return;
+    }
+    const text = document.getElementById("dataInput").value.trim();
+    if (!text) { showWarning(t().pasteFirst); return; }
     if (reportFormat === "cat12") {
       catReport = parseCat12Report(text);
       catSort = null;
-      parsedClusters = [];
       if (!catReport.clusters.length) { showWarning(t().noClusters); return; }
       document.getElementById("workspace").classList.add("open");
       showSection("general");
@@ -491,24 +511,46 @@ function loadData() {
 }
 
 function setFormat(fmt) {
-  reportFormat = fmt === "cat12" ? "cat12" : "xjview";
-  document.body.classList.toggle("format-cat12", reportFormat === "cat12");
-  const xj = document.getElementById("fmt-xj");
-  const cat = document.getElementById("fmt-cat");
-  if (xj) xj.setAttribute("aria-pressed", reportFormat === "xjview" ? "true" : "false");
-  if (cat) cat.setAttribute("aria-pressed", reportFormat === "cat12" ? "true" : "false");
-  const input = document.getElementById("dataInput");
+  const next = fmt === "cat12" || fmt === "both" ? fmt : "xjview";
+  const prev = reportFormat;
+  const data = document.getElementById("dataInput");
+  const xj = document.getElementById("xjInput");
+  const cat = document.getElementById("catInput");
+  if (prev !== "both" && next === "both") {
+    if (prev === "cat12" && cat && data && !cat.value) cat.value = data.value;
+    if (prev !== "cat12" && xj && data && !xj.value) xj.value = data.value;
+  }
+  if (prev === "both" && next === "xjview" && data && xj) data.value = xj.value;
+  if (prev === "both" && next === "cat12" && data && cat) data.value = cat.value;
+  reportFormat = next;
+  document.body.classList.toggle("format-cat12", next === "cat12");
+  document.body.classList.toggle("format-both", next === "both");
+  const xjBtn = document.getElementById("fmt-xj");
+  const catBtn = document.getElementById("fmt-cat");
+  const bothBtn = document.getElementById("fmt-both");
+  if (xjBtn) xjBtn.setAttribute("aria-pressed", next === "xjview" ? "true" : "false");
+  if (catBtn) catBtn.setAttribute("aria-pressed", next === "cat12" ? "true" : "false");
+  if (bothBtn) bothBtn.setAttribute("aria-pressed", next === "both" ? "true" : "false");
   const legend = document.getElementById("voxelLegend");
-  if (input) input.placeholder = reportFormat === "cat12" ? t().placeholderCat : t().placeholder;
-  if (legend) legend.textContent = reportFormat === "cat12" ? t().filterSize : t().filterVoxels;
-  catReport = null;
-  parsedClusters = [];
-  document.getElementById("dataInput").value = "";
-  document.getElementById("workspace").classList.remove("open");
-  document.getElementById("generalOutput").innerHTML = "";
+  if (data) data.placeholder = next === "cat12" ? t().placeholderCat : t().placeholder;
+  if (legend) legend.textContent = next === "cat12" ? t().filterSize : t().filterVoxels;
+  if (next === "both" && (parsedClusters.length || (catReport && catReport.clusters.length))) {
+    document.getElementById("workspace").classList.add("open");
+    renderBoth();
+  }
 }
 
 function loadSample() {
+  if (reportFormat === "both") {
+    document.getElementById("xjInput").value = SAMPLE;
+    document.getElementById("catInput").value = SAMPLE_CAT12;
+    document.getElementById("ignoreUndefined").checked = true;
+    document.getElementById("ignoreWhiteMatter").checked = true;
+    document.getElementById("removeAALSuffix").checked = true;
+    document.getElementById("firstRegion").checked = true;
+    loadData();
+    return;
+  }
   if (reportFormat === "cat12") {
     document.getElementById("dataInput").value = SAMPLE_CAT12;
     loadData();
@@ -524,6 +566,10 @@ function loadSample() {
 
 function clearAll() {
   document.getElementById("dataInput").value = "";
+  const xj = document.getElementById("xjInput");
+  const cat = document.getElementById("catInput");
+  if (xj) xj.value = "";
+  if (cat) cat.value = "";
   parsedClusters = [];
   catReport = null;
   catSort = null;
@@ -572,6 +618,10 @@ function showSection(section) {
 }
 
 function refresh() {
+  if (reportFormat === "both") {
+    if (parsedClusters.length || (catReport && catReport.clusters.length)) renderBoth();
+    return;
+  }
   if (reportFormat === "cat12") {
     if (catReport) renderCat12();
     return;
@@ -630,10 +680,10 @@ function sortMark(key, sort) {
 
 function sortCatBy(key) {
   catSort = nextSort(catSort, key);
-  renderCat12();
+  refresh();
 }
 
-function renderCat12() {
+function renderCat12(mount) {
   if (!catReport) return;
   const options = optionsFromUI();
   const dict = t();
@@ -657,7 +707,9 @@ function renderCat12() {
       ? `<span class="chip">${escAttr(catReport.atlas || catReport.title)}</span>`
       : "");
   if (!rows.length) {
-    document.getElementById("generalOutput").innerHTML = `<div class="table-scroll"><div class="empty">${dict.emptyFilter}</div></div>`;
+    const empty = `<div class="table-scroll"><div class="empty">${dict.emptyFilter}</div></div>`;
+    if (mount) { mount.innerHTML = empty; return; }
+    document.getElementById("generalOutput").innerHTML = empty;
     document.getElementById("exportGeneralCSV").style.display = "none";
     return;
   }
@@ -670,7 +722,8 @@ function renderCat12() {
     }).join("")
   }</tr></thead><tbody>`);
   rows.forEach((row) => {
-    html += "<tr>";
+    const cls = activeShared && activeShared.has(xyzKey(row.xyz)) ? "is-match" : "";
+    html += `<tr class="${cls}">`;
     keys.forEach((key) => {
       const text = cat12Cell(row, key);
       html += `<td class="${classes[key]}" title="${escAttr(text)}">${text}</td>`;
@@ -678,13 +731,14 @@ function renderCat12() {
     html += "</tr>";
   });
   html += "</tbody></table></div></div>";
+  if (mount) { mount.innerHTML = html; return; }
   document.getElementById("generalOutput").innerHTML = html;
   document.getElementById("exportGeneralCSV").style.display = "inline-flex";
   document.getElementById("detailSection").style.display = "none";
   document.getElementById("generalSection").style.display = "";
 }
 
-function renderGeneral(data) {
+function renderGeneral(data, mount) {
   currentGeneralData = data;
   const options = optionsFromUI();
   const dict = t();
@@ -720,7 +774,7 @@ function renderGeneral(data) {
       currentFirst = item.firstRegion;
       html += `<tr class="group"><td colspan="${headers.length}">${currentFirst}</td></tr>`;
     }
-    const cls = item.isDuplicate ? "is-dup" : "";
+    const cls = [item.isDuplicate ? "is-dup" : "", activeShared && activeShared.has(xyzKey(item.peakMNI)) ? "is-match" : ""].filter(Boolean).join(" ");
     html += `<tr class="${cls}" onclick="openDetail('${item.cluster}')">`;
     headers.forEach((h) => {
       const text = displayCell(item, h);
@@ -730,11 +784,43 @@ function renderGeneral(data) {
   });
   html += "</tbody></table></div>";
   html += "</div>";
+  if (mount) { mount.innerHTML = html; return; }
   document.getElementById("generalOutput").innerHTML = html;
   document.getElementById("exportGeneralCSV").style.display = "inline-flex";
 }
 
+function renderBoth() {
+  const options = optionsFromUI();
+  const dict = t();
+  const xjRows = parsedClusters.length ? getGeneralData(parsedClusters, options) : [];
+  const catRows = catReport
+    ? cat12Rows(catReport, options.voxelFilterType, options.voxelFilterValue)
+    : [];
+  const box = document.getElementById("matchXyz");
+  activeShared = box && box.checked ? sharedXyzKeys(xjRows, catRows) : new Set();
+  const left = document.createElement("div");
+  const right = document.createElement("div");
+  if (xjRows.length) renderGeneral(xjRows, left);
+  else left.innerHTML = `<div class="table-scroll"><div class="empty">${dict.emptyFilter}</div></div>`;
+  const savedGeneral = currentGeneralData;
+  if (catRows.length) renderCat12(right);
+  else right.innerHTML = `<div class="table-scroll"><div class="empty">${dict.emptyFilter}</div></div>`;
+  currentGeneralData = savedGeneral;
+  let chips = "";
+  if (!activeShared.size) chips = `<span class="chip">${escAttr(dict.sharedNone)}</span>`;
+  else activeShared.forEach((key) => { chips += `<span class="chip">${escAttr(key.replace(/,/g, " "))}</span>`; });
+  document.getElementById("meta").innerHTML =
+    `<span class="chip">${escAttr(dict.sharedXyz)}</span>` + chips;
+  document.getElementById("generalOutput").innerHTML =
+    `<div class="split-view"><section class="split-pane"><h2>xjView</h2>${left.innerHTML}</section><section class="split-pane"><h2>CAT12</h2>${right.innerHTML}</section></div>`;
+  document.getElementById("exportGeneralCSV").style.display = xjRows.length ? "inline-flex" : "none";
+  document.getElementById("generalSection").style.display = "";
+  document.getElementById("detailSection").style.display = "none";
+  activeShared = null;
+}
+
 function openDetail(id) {
+  if (reportFormat === "both") return;
   document.getElementById("clusterSelect").value = id;
   showSection("detail");
   showDetail();
