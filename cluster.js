@@ -512,3 +512,176 @@ function sharedXyzKeys(xjRows, catRows) {
   return shared;
 }
 
+function sheetCell(raw, key) {
+  if (raw === "" || raw === null || raw === undefined) return "";
+  const text = String(raw);
+  if (key === "peakMNI" || key === "peakRegion" || key === "firstRegion" || key === "lastRegion") return text;
+  if (/^-?\d+(\.\d+)?$/.test(text)) return Number(text);
+  return text;
+}
+
+function generalSheet(rows, options, labels) {
+  const headers = columnHeaders(options, rows[0] || {});
+  const sheet = [headers.map((h) => (labels && labels[h]) || HEADER_LABELS[h] || h)];
+  rows.forEach((row) => {
+    sheet.push(headers.map((h) => sheetCell(cellValue(row, h), h)));
+  });
+  return sheet;
+}
+
+function cat12Sheet(rows) {
+  const sheet = [CAT12_LABELS.slice()];
+  rows.forEach((row) => {
+    sheet.push([
+      row.isFirst ? row.pValue : "",
+      row.isFirst ? row.clusterSize : "",
+      row.isFirst ? row.xyz : "",
+      row.percent,
+      row.region,
+    ]);
+  });
+  return sheet;
+}
+
+function detailSheet(voxels) {
+  const sheet = [["# Voxels", "Structure"]];
+  voxels.forEach((voxel) => sheet.push([voxel.voxelCount, voxel.structure]));
+  return sheet;
+}
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(data) {
+  let c = 0xffffffff;
+  for (let i = 0; i < data.length; i++) c = CRC_TABLE[(c ^ data[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function xmlEscape(value) {
+  return String(value)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/&/g, "&")
+    .replace(/</g, "<")
+    .replace(/>/g, ">");
+}
+
+function colName(index) {
+  let n = index + 1;
+  let name = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    name = String.fromCharCode(65 + rem) + name;
+    n = Math.floor((n - 1) / 26);
+  }
+  return name;
+}
+
+function sheetXml(rows) {
+  const body = rows.map((row, r) => {
+    const cells = row.map((value, c) => {
+      if (value === "" || value === null || value === undefined) return "";
+      const ref = colName(c) + (r + 1);
+      if (typeof value === "number" && isFinite(value)) return `<c r="${ref}"><v>${value}</v></c>`;
+      return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
+    }).join("");
+    return `<row r="${r + 1}">${cells}</row>`;
+  }).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${body}</sheetData></worksheet>`;
+}
+
+function zipStore(files) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  files.forEach((file) => {
+    const name = new TextEncoder().encode(file.name);
+    const crc = crc32(file.data);
+    const local = new Uint8Array(30 + name.length);
+    const view = new DataView(local.buffer);
+    view.setUint32(0, 0x04034b50, true);
+    view.setUint16(4, 20, true);
+    view.setUint32(14, crc, true);
+    view.setUint32(18, file.data.length, true);
+    view.setUint32(22, file.data.length, true);
+    view.setUint16(26, name.length, true);
+    local.set(name, 30);
+    locals.push(local, file.data);
+    const central = new Uint8Array(46 + name.length);
+    const cview = new DataView(central.buffer);
+    cview.setUint32(0, 0x02014b50, true);
+    cview.setUint16(4, 20, true);
+    cview.setUint16(6, 20, true);
+    cview.setUint32(16, crc, true);
+    cview.setUint32(20, file.data.length, true);
+    cview.setUint32(24, file.data.length, true);
+    cview.setUint16(28, name.length, true);
+    cview.setUint32(42, offset, true);
+    central.set(name, 46);
+    centrals.push(central);
+    offset += local.length + file.data.length;
+  });
+  const centralSize = centrals.reduce((sum, part) => sum + part.length, 0);
+  const end = new Uint8Array(22);
+  const eview = new DataView(end.buffer);
+  eview.setUint32(0, 0x06054b50, true);
+  eview.setUint16(8, files.length, true);
+  eview.setUint16(10, files.length, true);
+  eview.setUint32(12, centralSize, true);
+  eview.setUint32(16, offset, true);
+  const out = new Uint8Array(offset + centralSize + end.length);
+  let cursor = 0;
+  locals.concat(centrals, [end]).forEach((part) => {
+    out.set(part, cursor);
+    cursor += part.length;
+  });
+  return out;
+}
+
+function tableToXlsxBlob(rows, sheetName) {
+  return tablesToXlsxBlob([{ name: sheetName || "Clusters", rows: rows }]);
+}
+
+function tablesToXlsxBlob(sheets) {
+  const used = sheets && sheets.length ? sheets : [{ name: "Clusters", rows: [] }];
+  const names = used.map((sheet, index) => {
+    const base = String(sheet.name || "Sheet").replace(/[\\/*?:\[\]]/g, " ").trim().slice(0, 31);
+    return base || ("Sheet" + (index + 1));
+  });
+  const utf8 = (text) => new TextEncoder().encode(text);
+  const files = [
+    { name: "[Content_Types].xml", data: utf8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+${names.map((_, index) => `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}
+</Types>`) },
+    { name: "_rels/.rels", data: utf8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`) },
+    { name: "xl/workbook.xml", data: utf8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>${names.map((name, index) => `<sheet name="${xmlEscape(name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}</sheets>
+</workbook>`) },
+    { name: "xl/_rels/workbook.xml.rels", data: utf8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${names.map((_, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join("")}
+</Relationships>`) },
+  ];
+  used.forEach((sheet, index) => {
+    files.push({ name: "xl/worksheets/sheet" + (index + 1) + ".xml", data: utf8(sheetXml(sheet.rows)) });
+  });
+  const bytes = zipStore(files);
+  return new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+

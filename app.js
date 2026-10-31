@@ -59,6 +59,7 @@ let currentDetailData = [];
 let currentLang = "en";
 let reportFormat = "xjview";
 let activeShared = null;
+let currentCatRows = [];
 let catReport = null;
 let catSort = null;
 let generalSort = null;
@@ -89,7 +90,7 @@ const I18N = {
     selectAll: "Select all",
     general: "General",
     detail: "Detail",
-    exportCsv: "Export CSV",
+    exportCsv: "Export XLSX",
     format: "Format",
     reportHintCat: "CAT12 table: p-value, cluster size, xyz, atlas overlap.",
     placeholderCat: "p-value  Cluster-Size  xyz [mm]  Overlap of atlas region",
@@ -157,7 +158,7 @@ const I18N = {
     selectAll: "全選",
     general: "總覽",
     detail: "明細",
-    exportCsv: "匯出 CSV",
+    exportCsv: "匯出 XLSX",
     format: "格式",
     reportHintCat: "CAT12 表格：p 值、叢集大小、xyz、圖譜重疊。",
     placeholderCat: "p-value  Cluster-Size  xyz [mm]  Overlap of atlas region",
@@ -805,6 +806,7 @@ function renderBoth() {
   const savedGeneral = currentGeneralData;
   if (catRows.length) renderCat12(right);
   else right.innerHTML = `<div class="table-scroll"><div class="empty">${dict.emptyFilter}</div></div>`;
+  currentCatRows = catRows.length ? currentGeneralData : [];
   currentGeneralData = savedGeneral;
   let chips = "";
   if (!activeShared.size) chips = `<span class="chip">${escAttr(dict.sharedNone)}</span>`;
@@ -866,15 +868,30 @@ function selectAllCheckboxes() {
 }
 
 function exportToCSV(type) {
-  if (reportFormat === "cat12") {
-    downloadFile(cat12ToCsv(currentGeneralData), "cat12_data.csv");
-    return;
-  }
-  if (type === "general") {
-    downloadFile(rowsToCsv(currentGeneralData, optionsFromUI()), "general_data.csv");
+  let blob;
+  let name;
+  if (type === "detail") {
+    blob = tableToXlsxBlob(detailSheet(currentDetailData), "Detail");
+    name = "detail_data.xlsx";
+  } else if (reportFormat === "both") {
+    blob = tablesToXlsxBlob([
+      { name: "xjView", rows: generalSheet(currentGeneralData, optionsFromUI(), t().headers) },
+      { name: "CAT12", rows: cat12Sheet(currentCatRows) },
+    ]);
+    name = "clusters.xlsx";
+  } else if (reportFormat === "cat12") {
+    blob = tableToXlsxBlob(cat12Sheet(currentGeneralData), "CAT12");
+    name = "cat12_data.xlsx";
   } else {
-    downloadFile(voxelsToCsv(currentDetailData), "detail_data.csv");
+    blob = tableToXlsxBlob(generalSheet(currentGeneralData, optionsFromUI(), t().headers), "xjView");
+    name = "general_data.xlsx";
   }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function downloadFile(content, fileName) {
