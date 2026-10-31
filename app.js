@@ -265,6 +265,7 @@ function applyTheme(theme) {
       ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M3 12h2M19 12h2M5.2 18.8l1.4-1.4M17.4 6.6l1.4-1.4"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 14.3A8.5 8.5 0 0 1 9.7 3 7 7 0 1 0 21 14.3z"/></svg>';
   }
+  paintAccent(normalizeHex(localStorage.getItem("cluster-accent") || ""));
 }
 
 function initTheme() {
@@ -282,12 +283,6 @@ function toggleTheme() {
 
 const ACCENT_PRESETS = ["#1a4f7a", "#0e7490", "#0f766e", "#15803d", "#3730a3", "#6d28d9", "#9f1239", "#b45309", "#334155"];
 
-function contrastFg(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  const y = (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000;
-  return y > 160 ? "#0b121a" : "#f4f8fb";
-}
-
 function normalizeHex(value) {
   let hex = String(value || "").trim();
   if (!hex.startsWith("#")) hex = "#" + hex;
@@ -297,24 +292,118 @@ function normalizeHex(value) {
   return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex.toLowerCase() : null;
 }
 
+function hexToHsl(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  const d = max - min;
+  if (d !== 0) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h: h, s: s * 100, l: l * 100 };
+}
+
+function hslToHex(h, s, l) {
+  s /= 100;
+  l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => {
+    const k = (n + h / 30) % 12;
+    return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+  };
+  return "#" + [f(0), f(8), f(4)].map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("");
+}
+
+function luma(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000;
+}
+
+function themeFromAccent(hex, dark) {
+  const src = hexToHsl(hex);
+  const soft = Math.min(src.s, 36);
+  const inkOn = (color) => (luma(color) > 158 ? "#1c1916" : "#f7f5f2");
+  if (!dark) {
+    const primary = src.s < 8
+      ? hslToHex(src.h, 0, 30)
+      : hslToHex(src.h, Math.min(Math.max(src.s, 38), 74), src.l < 24 ? 32 : src.l > 50 ? 38 : src.l);
+    return {
+      bg: hslToHex(src.h, soft * 0.75, 92),
+      surface: hslToHex(src.h, soft * 0.4, 97.5),
+      wash: hslToHex(src.h, soft * 0.85, 86.5),
+      ink: hslToHex(src.h, Math.min(soft, 20), 15),
+      muted: hslToHex(src.h, Math.min(soft * 0.4, 14), 35),
+      subtle: hslToHex(src.h, Math.min(soft * 0.28, 10), 47),
+      line: hslToHex(src.h, soft * 0.5, 76),
+      primary: primary,
+      primaryFg: inkOn(primary),
+      hover: hslToHex(src.h, soft * 0.7, 89.5),
+      active: hslToHex(src.h, soft * 0.8, 83),
+      dup: hslToHex((src.h + 52) % 360, 26, 88),
+    };
+  }
+  const primary = src.s < 8
+    ? hslToHex(src.h, 0, 74)
+    : hslToHex(src.h, Math.min(Math.max(src.s * 0.8, 28), 58), src.l > 80 ? 70 : src.l < 58 ? 68 : src.l);
+  return {
+    bg: hslToHex(src.h, Math.min(soft, 20), 8),
+    surface: hslToHex(src.h, Math.min(soft, 16), 12),
+    wash: hslToHex(src.h, Math.min(soft, 14), 17),
+    ink: hslToHex(src.h, Math.min(soft * 0.3, 12), 93),
+    muted: hslToHex(src.h, Math.min(soft * 0.22, 10), 74),
+    subtle: hslToHex(src.h, Math.min(soft * 0.16, 8), 62),
+    line: hslToHex(src.h, Math.min(soft, 12), 27),
+    primary: primary,
+    primaryFg: inkOn(primary),
+    hover: hslToHex(src.h, Math.min(soft, 16), 18),
+    active: hslToHex(src.h, Math.min(soft, 18), 22),
+    dup: hslToHex((src.h + 52) % 360, 16, 22),
+  };
+}
+
+const PAGE_THEME_VARS = ["--bg", "--surface", "--wash", "--ink", "--muted", "--subtle", "--line", "--primary", "--primary-fg", "--hover", "--active", "--dup"];
+
 function paintAccent(hex) {
   const root = document.documentElement.style;
   const swatch = document.getElementById("accentSwatch");
-  if (!hex) {
-    root.removeProperty("--primary");
-    root.removeProperty("--primary-fg");
-    if (swatch) swatch.style.background = "";
-    const color = document.getElementById("accentColor");
-    const text = document.getElementById("accentHex");
-    if (color) color.value = "#1a4f7a";
-    if (text) text.value = "#1A4F7A";
-    return;
-  }
-  root.setProperty("--primary", hex);
-  root.setProperty("--primary-fg", contrastFg(hex));
-  if (swatch) swatch.style.background = hex;
   const color = document.getElementById("accentColor");
   const text = document.getElementById("accentHex");
+  if (!hex) {
+    PAGE_THEME_VARS.forEach((name) => root.removeProperty(name));
+    if (swatch) swatch.style.background = "";
+    if (color) color.value = "#1a4f7a";
+    if (text) text.value = "#1A4F7A";
+    document.querySelectorAll("#accentSwatches button").forEach((btn) => {
+      btn.setAttribute("aria-pressed", btn.dataset.color === "#1a4f7a" ? "true" : "false");
+    });
+    return;
+  }
+  const dark = document.documentElement.classList.contains("dark");
+  const p = themeFromAccent(hex, dark);
+  root.setProperty("--bg", p.bg);
+  root.setProperty("--surface", p.surface);
+  root.setProperty("--wash", p.wash);
+  root.setProperty("--ink", p.ink);
+  root.setProperty("--muted", p.muted);
+  root.setProperty("--subtle", p.subtle);
+  root.setProperty("--line", p.line);
+  root.setProperty("--primary", p.primary);
+  root.setProperty("--primary-fg", p.primaryFg);
+  root.setProperty("--hover", p.hover);
+  root.setProperty("--active", p.active);
+  root.setProperty("--dup", p.dup);
+  if (swatch) swatch.style.background = hex;
   if (color) color.value = hex;
   if (text && document.activeElement !== text) text.value = hex.toUpperCase();
   document.querySelectorAll("#accentSwatches button").forEach((btn) => {

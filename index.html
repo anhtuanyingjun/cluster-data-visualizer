@@ -15,12 +15,18 @@
         if (localStorage.getItem("cluster-lang") === "zh-Hant") document.documentElement.lang = "zh-Hant";
         var c = localStorage.getItem("cluster-accent");
         if (c && /^#[0-9a-fA-F]{6}$/.test(c)) {
-          var n = parseInt(c.slice(1), 16);
-          var y = (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000;
-          var fg = y > 160 ? "#0b121a" : "#f4f8fb";
-          var r = document.documentElement.style;
-          r.setProperty("--primary", c);
-          r.setProperty("--primary-fg", fg);
+          function hsl(h,s,l){s/=100;l/=100;var a=s*Math.min(l,1-l);function f(n){var k=(n+h/30)%12;return l-a*Math.max(Math.min(k-3,9-k,1),-1)}return"#"+[f(0),f(8),f(4)].map(function(v){return Math.round(v*255).toString(16).padStart(2,"0")}).join("")}
+          function toHsl(hex){var n=parseInt(hex.slice(1),16),r=((n>>16)&255)/255,g=((n>>8)&255)/255,b=(n&255)/255,max=Math.max(r,g,b),min=Math.min(r,g,b),l=(max+min)/2,d=max-min,h=0,s=0;if(d){s=d/(1-Math.abs(2*l-1));h=max===r?((g-b)/d)%6:max===g?(b-r)/d+2:(r-g)/d+4;h*=60;if(h<0)h+=360}return{h:h,s:s*100,l:l*100}}
+          function y(hex){var n=parseInt(hex.slice(1),16);return(((n>>16)&255)*299+((n>>8)&255)*587+(n&255)*114)/1000}
+          var o=toHsl(c),soft=Math.min(o.s,36),dark=d,primary;
+          if(!dark) primary=o.s<8?hsl(o.h,0,30):hsl(o.h,Math.min(Math.max(o.s,38),74),o.l<24?32:o.l>50?38:o.l);
+          else primary=o.s<8?hsl(o.h,0,74):hsl(o.h,Math.min(Math.max(o.s*0.8,28),58),o.l>80?70:o.l<58?68:o.l);
+          var fg=y(primary)>158?"#1c1916":"#f7f5f2";
+          var map=dark?{"--bg":hsl(o.h,Math.min(soft,20),8),"--surface":hsl(o.h,Math.min(soft,16),12),"--wash":hsl(o.h,Math.min(soft,14),17),"--ink":hsl(o.h,Math.min(soft*0.3,12),93),"--muted":hsl(o.h,Math.min(soft*0.22,10),74),"--subtle":hsl(o.h,Math.min(soft*0.16,8),62),"--line":hsl(o.h,Math.min(soft,12),27),"--hover":hsl(o.h,Math.min(soft,16),18),"--active":hsl(o.h,Math.min(soft,18),22),"--dup":hsl((o.h+52)%360,16,22)}:{"--bg":hsl(o.h,soft*0.75,92),"--surface":hsl(o.h,soft*0.4,97.5),"--wash":hsl(o.h,soft*0.85,86.5),"--ink":hsl(o.h,Math.min(soft,20),15),"--muted":hsl(o.h,Math.min(soft*0.4,14),35),"--subtle":hsl(o.h,Math.min(soft*0.28,10),47),"--line":hsl(o.h,soft*0.5,76),"--hover":hsl(o.h,soft*0.7,89.5),"--active":hsl(o.h,soft*0.8,83),"--dup":hsl((o.h+52)%360,26,88)};
+          var st=document.documentElement.style;
+          Object.keys(map).forEach(function(k){st.setProperty(k,map[k])});
+          st.setProperty("--primary",primary);
+          st.setProperty("--primary-fg",fg);
         }
       } catch (e) {}
     })();
