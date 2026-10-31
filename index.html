@@ -13,6 +13,15 @@
         var d = t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
         if (d) document.documentElement.classList.add("dark");
         if (localStorage.getItem("cluster-lang") === "zh-Hant") document.documentElement.lang = "zh-Hant";
+        var c = localStorage.getItem("cluster-accent");
+        if (c && /^#[0-9a-fA-F]{6}$/.test(c)) {
+          var n = parseInt(c.slice(1), 16);
+          var y = (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000;
+          var fg = y > 160 ? "#0b121a" : "#f4f8fb";
+          var r = document.documentElement.style;
+          r.setProperty("--primary", c);
+          r.setProperty("--primary-fg", fg);
+        }
       } catch (e) {}
     })();
   </script>
@@ -29,6 +38,19 @@
         <div class="lang-switch" role="group" aria-label="Language">
           <button type="button" id="lang-en" aria-pressed="true" onclick="setLang('en')">EN</button>
           <button type="button" id="lang-zh" aria-pressed="false" onclick="setLang('zh-Hant')">繁</button>
+        </div>
+        <div class="accent" id="accentPicker">
+          <button class="btn btn-icon" id="accentBtn" type="button" onclick="toggleAccent(event)" data-i18n-aria="accent" aria-label="Interface color">
+            <span class="swatch" id="accentSwatch"></span>
+          </button>
+          <div class="accent-pop" id="accentPop">
+            <div class="swatches" id="accentSwatches"></div>
+            <label class="accent-code">
+              <input type="color" id="accentColor" value="#1a4f7a" aria-label="Color code" oninput="setAccent(this.value)">
+              <input type="text" id="accentHex" maxlength="7" spellcheck="false" value="#1A4F7A" aria-label="Color code" oninput="typeAccent(this.value)">
+            </label>
+            <button class="btn btn-text" type="button" onclick="resetAccent()" data-i18n="resetColor">Default</button>
+          </div>
         </div>
         <button class="btn btn-icon" id="themeToggle" type="button" onclick="toggleTheme()" aria-label="Switch theme"></button>
       </div>

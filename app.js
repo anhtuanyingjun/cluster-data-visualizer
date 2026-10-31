@@ -106,6 +106,9 @@ const I18N = {
     clusterOpt: (id) => "Cluster " + id,
     themeDark: "Switch to dark theme",
     themeLight: "Switch to light theme",
+    accent: "Interface color",
+    accentCode: "Color code",
+    resetColor: "Default",
     voxelsCol: "# Voxels",
     structure: "Structure",
     share: "Share",
@@ -168,6 +171,9 @@ const I18N = {
     clusterOpt: (id) => "叢集 " + id,
     themeDark: "切換深色模式",
     themeLight: "切換淺色模式",
+    accent: "介面顏色",
+    accentCode: "色碼",
+    resetColor: "預設",
     voxelsCol: "體素數",
     structure: "結構",
     share: "佔比",
@@ -211,6 +217,12 @@ function applyI18n() {
   const zhBtn = document.getElementById("lang-zh");
   if (enBtn) enBtn.setAttribute("aria-pressed", currentLang === "en" ? "true" : "false");
   if (zhBtn) zhBtn.setAttribute("aria-pressed", currentLang === "zh-Hant" ? "true" : "false");
+  const accentBtn = document.getElementById("accentBtn");
+  if (accentBtn) accentBtn.setAttribute("aria-label", dict.accent);
+  const accentColor = document.getElementById("accentColor");
+  const accentHex = document.getElementById("accentHex");
+  if (accentColor) accentColor.setAttribute("aria-label", dict.accentCode);
+  if (accentHex) accentHex.setAttribute("aria-label", dict.accentCode);
   const themeBtn = document.getElementById("themeToggle");
   if (themeBtn) {
     const dark = document.documentElement.classList.contains("dark");
@@ -266,6 +278,84 @@ function initTheme() {
 function toggleTheme() {
   const next = document.documentElement.classList.contains("dark") ? "light" : "dark";
   applyTheme(next);
+}
+
+const ACCENT_PRESETS = ["#1a4f7a", "#0e7490", "#0f766e", "#15803d", "#3730a3", "#6d28d9", "#9f1239", "#b45309", "#334155"];
+
+function contrastFg(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const y = (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000;
+  return y > 160 ? "#0b121a" : "#f4f8fb";
+}
+
+function normalizeHex(value) {
+  let hex = String(value || "").trim();
+  if (!hex.startsWith("#")) hex = "#" + hex;
+  if (/^#[0-9a-fA-F]{3}$/.test(hex)) {
+    hex = "#" + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+  }
+  return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex.toLowerCase() : null;
+}
+
+function paintAccent(hex) {
+  const root = document.documentElement.style;
+  const swatch = document.getElementById("accentSwatch");
+  if (!hex) {
+    root.removeProperty("--primary");
+    root.removeProperty("--primary-fg");
+    if (swatch) swatch.style.background = "";
+    const color = document.getElementById("accentColor");
+    const text = document.getElementById("accentHex");
+    if (color) color.value = "#1a4f7a";
+    if (text) text.value = "#1A4F7A";
+    return;
+  }
+  root.setProperty("--primary", hex);
+  root.setProperty("--primary-fg", contrastFg(hex));
+  if (swatch) swatch.style.background = hex;
+  const color = document.getElementById("accentColor");
+  const text = document.getElementById("accentHex");
+  if (color) color.value = hex;
+  if (text && document.activeElement !== text) text.value = hex.toUpperCase();
+  document.querySelectorAll("#accentSwatches button").forEach((btn) => {
+    btn.setAttribute("aria-pressed", btn.dataset.color === hex ? "true" : "false");
+  });
+}
+
+function setAccent(value) {
+  const hex = normalizeHex(value);
+  if (!hex) return;
+  if (hex === "#1a4f7a") {
+    localStorage.removeItem("cluster-accent");
+    paintAccent(null);
+    return;
+  }
+  localStorage.setItem("cluster-accent", hex);
+  paintAccent(hex);
+}
+
+function typeAccent(value) {
+  const hex = normalizeHex(value);
+  if (hex) setAccent(hex);
+}
+
+function resetAccent() {
+  localStorage.removeItem("cluster-accent");
+  paintAccent(null);
+}
+
+function toggleAccent(event) {
+  event.stopPropagation();
+  document.getElementById("accentPicker").classList.toggle("open");
+}
+
+function initAccent() {
+  const box = document.getElementById("accentSwatches");
+  if (!box) return;
+  box.innerHTML = ACCENT_PRESETS.map((color) =>
+    `<button type="button" data-color="${color}" style="background:${color}" aria-label="${color}" onclick="setAccent('${color}')"></button>`,
+  ).join("");
+  paintAccent(normalizeHex(localStorage.getItem("cluster-accent") || ""));
 }
 
 function optionsFromUI() {
@@ -482,8 +572,8 @@ function renderCat12() {
     document.getElementById("exportGeneralCSV").style.display = "none";
     return;
   }
-  const keys = ["pValue", "clusterSize", "xyz", "overlap"];
-  const classes = { pValue: "num", clusterSize: "num", xyz: "mni", overlap: "wrap" };
+  const keys = ["pValue", "clusterSize", "xyz", "percent", "region"];
+  const classes = { pValue: "num", clusterSize: "num", xyz: "mni", percent: "num", region: "wrap" };
   let html = wrapTableShell("cat12", `<div class="table-scroll"><table class="data"><thead><tr>${
     keys.map((key, i) => {
       const aria = catSort && catSort.key === key ? (catSort.dir === "desc" ? "descending" : "ascending") : "none";
@@ -645,11 +735,11 @@ function toggleTableMenu(event) {
 function tableImagePayload(kind) {
   const dict = t();
   if (kind === "cat12") {
-    const keys = ["pValue", "clusterSize", "xyz", "overlap"];
+    const keys = ["pValue", "clusterSize", "xyz", "percent", "region"];
     return {
       headers: CAT12_LABELS.slice(),
       rows: currentGeneralData.map((row) => keys.map((key) => cat12Cell(row, key))),
-      numeric: [true, true, false, false],
+      numeric: [true, true, false, true, false],
       fileName: "cat12_table.png",
     };
   }
@@ -705,10 +795,15 @@ document.addEventListener("mousedown", (event) => {
   if (!event.target.closest(".table-shell")) {
     document.querySelectorAll(".table-shell.open").forEach((el) => el.classList.remove("open"));
   }
+  if (!event.target.closest("#accentPicker")) {
+    const picker = document.getElementById("accentPicker");
+    if (picker) picker.classList.remove("open");
+  }
 });
 
 document.addEventListener("DOMContentLoaded", () => {
   currentLang = localStorage.getItem("cluster-lang") === "zh-Hant" ? "zh-Hant" : "en";
   initTheme();
+  initAccent();
   applyI18n();
 });

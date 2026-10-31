@@ -367,7 +367,7 @@ function tableToPngBlob(headers, rows, numeric) {
 
 const CAT12_PEAK = /^\s*([0-9]*\.?[0-9]+(?:[eE][+-]?\d+)?)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d+(?:\.\d+)?)\s*%\s+(.+?)\s*$/;
 const CAT12_CONT = /^\s*(\d+(?:\.\d+)?)\s*%\s+(.+?)\s*$/;
-const CAT12_LABELS = ["p-value", "Cluster-Size", "xyz [mm]", "Overlap of atlas region"];
+const CAT12_LABELS = ["p-value", "Cluster-Size", "xyz [mm]", "%", "Atlas region"];
 
 function parseCat12Report(text) {
   const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
@@ -430,7 +430,9 @@ function cat12Rows(report, filterType, filterValue) {
         pValueNum: cluster.pValueNum,
         clusterSize: cluster.clusterSize,
         xyz: cluster.xyz,
-        overlap: overlap.percent + " " + overlap.region,
+        percent: overlap.percent,
+        percentNum: parseFloat(overlap.percent),
+        region: overlap.region,
       });
     });
   });
@@ -449,8 +451,12 @@ function sortCat12Rows(rows, sort) {
     }
     groups.get(row.clusterId).push(row);
   });
-  if (sort.key === "overlap") {
-    return rows.slice().sort((a, b) => compareSortValues(a.overlap, b.overlap) * mul);
+  if (sort.key === "percent" || sort.key === "region") {
+    return rows.slice().sort(function (a, b) {
+      var va = sort.key === "percent" ? a.percentNum : a.region;
+      var vb = sort.key === "percent" ? b.percentNum : b.region;
+      return compareSortValues(va, vb) * mul;
+    });
   }
   order.sort((a, b) => {
     const ra = groups.get(a)[0];
@@ -465,7 +471,8 @@ function sortCat12Rows(rows, sort) {
 }
 
 function cat12Cell(row, key) {
-  if (key === "overlap") return row.overlap;
+  if (key === "percent") return row.percent;
+  if (key === "region") return row.region;
   if (!row.isFirst) return "";
   if (key === "pValue") return row.pValue;
   if (key === "clusterSize") return row.clusterSize.toLocaleString();
@@ -474,7 +481,7 @@ function cat12Cell(row, key) {
 }
 
 function cat12ToCsv(rows) {
-  const keys = ["pValue", "clusterSize", "xyz", "overlap"];
+  const keys = ["pValue", "clusterSize", "xyz", "percent", "region"];
   const lines = [CAT12_LABELS.join(",")];
   rows.forEach((row) => {
     lines.push(keys.map((h) => csvEscape(cat12Cell(row, h))).join(","));
